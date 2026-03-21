@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Fall Detection Dashboard</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top, #1f2937 0, #020617 50%, #000 100%);
+            color: #e5e7eb;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .subtitle {
+            font-size: 0.9rem;
+            color: #9ca3af;
+            margin-bottom: 20px;
+        }
+        .layout {
+            display: grid;
+            grid-template-columns: 2.1fr 1.1fr;
+            gap: 20px;
+        }
+        @media (max-width: 950px) {
+            .layout {
+                grid-template-columns: 1fr;
+            }
+        }
+        .card {
+            background: rgba(15, 23, 42, 0.95);
+            border-radius: 14px;
+            padding: 16px 18px;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+        }
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .card-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+        .badge {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .badge-normal {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.4);
+        }
+        .badge-potential {
+            background: rgba(234, 179, 8, 0.1);
+            color: #facc15;
+            border: 1px solid rgba(234, 179, 8, 0.4);
+        }
+        .badge-escalated {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+        }
+        .badge-init {
+            background: rgba(59, 130, 246, 0.15);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+        }
+
+        .video-wrapper {
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            background: #020617;
+        }
+        .video-wrapper img {
+            width: 100%;
+            display: block;
+        }
+        .video-footer {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 8px;
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+        .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #22c55e;
+            margin-right: 6px;
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.8);
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .metric-card {
+            background: rgba(15, 23, 42, 0.85);
+            border-radius: 10px;
+            padding: 10px 11px;
+            border: 1px solid rgba(75, 85, 99, 0.6);
+        }
+        .metric-label {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .metric-sub {
+            font-size: 0.72rem;
+            color: #6b7280;
+            margin-top: 2px;
+        }
+        .status-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 6px;
+            font-size: 0.8rem;
+            color: #9ca3af;
+        }
+        .status-pill {
+            padding: 3px 8px;
+            background: rgba(31, 41, 55, 0.9);
+            border-radius: 999px;
+            border: 1px solid rgba(55, 65, 81, 0.8);
+        }
+        .status-pill-listening {
+            border-color: rgba(59,130,246,0.9);
+            color: #bfdbfe;
+            box-shadow: 0 0 15px rgba(59,130,246,0.6);
+        }
+        .status-pill-processing {
+            border-color: rgba(234,179,8,0.9);
+            color: #fde68a;
+        }
+        .controls {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .btn {
+            border: none;
+            border-radius: 999px;
+            padding: 7px 14px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-override {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+            color: white;
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.55);
+        }
+        .btn-override:active {
+            transform: translateY(1px);
+            box-shadow: none;
+        }
+        .btn-disabled {
+            background: #1f2937;
+            color: #6b7280;
+            box-shadow: none;
+            cursor: default;
+        }
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            color: #9ca3af;
+        }
+        .tag-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+        }
+        .tag-dot-yellow {
+            background: #facc15;
+        }
+        .tag-dot-red {
+            background: #f97373;
+        }
+        .tag-dot-green {
+            background: #4ade80;
+        }
+
+        .log-card {
+            margin-top: 14px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+            margin-top: 6px;
+        }
+        thead {
+            background: rgba(15,23,42,0.9);
+        }
+        th, td {
+            padding: 6px 5px;
+            text-align: left;
+            border-bottom: 1px solid rgba(55,65,81,0.6);
+        }
+        th {
+            font-weight: 600;
+            color: #9ca3af;
+        }
+        tbody tr:nth-child(every) {
+            background: rgba(15,23,42,0.3);
+        }
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .log-decision {
+            font-weight: 600;
+        }
+        .log-decision-NEEDS_HELP,
+        .log-decision_NO_RESPONSE,
+        .log-decision_UNCERTAIN {
+            color: #f97373;
+        }
+        .log-decision-USER_OK,
+        .log-decision-OVERRIDE_OK {
+            color: #4ade80;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Fall Detection Dashboard</h1>
+        <p class="subtitle">
+            Simulated monitoring using a pre-recorded video, pose estimation and AI-based fall detection.
+        </p>
+    </header>
+
+    <main class="layout">
+
+        <!-- LEFT: VIDEO + STATUS -->
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title">Video Feed</div>
+                <div id="status-badge" class="badge badge-init">Initialising</div>
+            </div>
+
+            <div class="video-wrapper">
+                <!-- Pre-recorded video stream with overlay -->
+                <img src="{{ url_for('video_feed') }}" alt="Live fall detection feed">
+            </div>
+
+            <div class="video-footer">
+                <div>
+                    <span class="dot"></span>
+                    <span id="processing-label">Processing pre-recorded fall scenario…</span>
+                </div>
+                <div id="time-of-day">--:--:--</div>
+            </div>
+
+            <div class="status-row">
+                <div class="status-pill">
+                    Last fall probability: <span id="last-prob">0.000</span>
+                </div>
+                <div class="status-pill">
+                    Last event: <span id="last-event-time">None</span>
+                </div>
+                <div class="status-pill" id="voice-indicator">
+                    Voice assistant: Idle
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="override-btn" class="btn btn-disabled" disabled>
+                    ⛔ Cancel False Alarm
+                </button>
+                <span class="tag">
+                    <span class="tag-dot tag-dot-red"></span> Alert Escalated
+                    &nbsp;&nbsp;
+                    <span class="tag-dot tag-dot-yellow"></span> Potential Fall
+                    &nbsp;&nbsp;
+                    <span class="tag-dot tag-dot-green"></span> Normal
+                </span>
+            </div>
+        </section>
+
+        <!-- RIGHT: HEALTH + HISTORY + LOG -->
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title">Patient Context (Simulated)</div>
+                <span class="badge badge-normal">Demo Mode</span>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Heart Rate</div>
+                    <div class="metric-value" id="heart-rate">0 bpm</div>
+                    <div class="metric-sub" id="health-status">--</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Fall History (Session)</div>
+                    <div class="metric-value">
+                        <span id="fall-count">0</span> falls
+                    </div>
+                    <div class="metric-sub">
+                        Escalated: <span id="escalated-count">0</span>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">Current Scenario</div>
+                    <div class="metric-value" id="scenario-label">Simulated home environment</div>
+                    <div class="metric-sub">Location: Living room · Single occupant</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-label">System Notes</div>
+                    <div class="metric-sub" id="system-notes">
+                        Watching for transitions from standing to lying with rapid motion.
+                    </div>
+                </div>
+            </div>
+
+            <div class="log-card">
+                <div class="card-header" style="padding:0; margin-bottom:6px; margin-top:10px;">
+                    <div class="card-title">Recent Fall Log</div>
+                    <span style="font-size:0.75rem; color:#9ca3af;">Last 20 events</span>
+                </div>
+                <div style="max-height: 220px; overflow-y: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Decision</th>
+                                <th>Prob</th>
+                                <th>HR</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="log-body">
+                            <!-- rows injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const statusBadge = document.getElementById("status-badge");
+        const lastProbSpan = document.getElementById("last-prob");
+        const lastEventSpan = document.getElementById("last-event-time");
+        const timeOfDaySpan = document.getElementById("time-of-day");
+        const heartRateSpan = document.getElementById("heart-rate");
+        const healthStatusSpan = document.getElementById("health-status");
+        const fallCountSpan = document.getElementById("fall-count");
+        const escalatedCountSpan = document.getElementById("escalated-count");
+        const overrideBtn = document.getElementById("override-btn");
+        const systemNotes = document.getElementById("system-notes");
+        const processingLabel = document.getElementById("processing-label");
+        const voiceIndicator = document.getElementById("voice-indicator");
+        const logBody = document.getElementById("log-body");
+
+        function setBadge(status) {
+            statusBadge.className = "badge"; // reset
+
+            if (status === "NORMAL") {
+                statusBadge.classList.add("badge-normal");
+                statusBadge.textContent = "Normal";
+                overrideBtn.disabled = true;
+                overrideBtn.className = "btn btn-disabled";
+                systemNotes.textContent = "No active alerts. Monitoring baseline posture.";
+            } else if (status === "POTENTIAL_FALL") {
+                statusBadge.classList.add("badge-potential");
+                statusBadge.textContent = "Potential Fall";
+                overrideBtn.disabled = false;
+                overrideBtn.className = "btn btn-override";
+                systemNotes.textContent = "Fall pattern detected. Awaiting voice response or manual override.";
+            } else if (status === "ALERT_ESCALATED") {
+                statusBadge.classList.add("badge-escalated");
+                statusBadge.textContent = "Alert Escalated";
+                overrideBtn.disabled = false;
+                overrideBtn.className = "btn btn-override";
+                systemNotes.textContent = "Alert sent. You can cancel as false alarm if the person is safe.";
+            } else if (status === "INITIALISING") {
+                statusBadge.classList.add("badge-init");
+                statusBadge.textContent = "Initialising";
+                overrideBtn.disabled = true;
+                overrideBtn.className = "btn btn-disabled";
+                systemNotes.textContent = "Preparing model, video and pose detection.";
+            } else {
+                statusBadge.classList.add("badge-init");
+                statusBadge.textContent = status;
+            }
+        }
+
+        function setVoiceIndicator(listening, waiting) {
+            voiceIndicator.className = "status-pill"; // reset
+            if (listening) {
+                voiceIndicator.classList.add("status-pill-listening");
+                voiceIndicator.textContent = "Voice assistant: Listening – speak now: say 'I am fine' or 'help me'";
+            } else if (waiting) {
+                voiceIndicator.classList.add("status-pill-processing");
+                voiceIndicator.textContent = "Voice assistant: Processing response…";
+            } else {
+                voiceIndicator.textContent = "Voice assistant: Idle";
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch("/status");
+                const data = await res.json();
+
+                setBadge(data.current_status || "INITIALISING");
+
+                lastProbSpan.textContent = (data.last_prob ?? 0).toFixed(3);
+                lastEventSpan.textContent = data.last_event_time || "None";
+                timeOfDaySpan.textContent = data.time_of_day || "--:--:--";
+
+                const hr = data.last_health?.heart_rate ?? 0;
+                heartRateSpan.textContent = hr + " bpm";
+                healthStatusSpan.textContent = data.last_health?.health_status ?? "--";
+
+                fallCountSpan.textContent = data.fall_count ?? 0;
+                escalatedCountSpan.textContent = data.escalated_count ?? 0;
+
+                const listening = data.listening ?? false;
+                const waiting = data.waiting_for_response ?? false;
+                setVoiceIndicator(listening, waiting);
+
+                // extra hint for when a fall event is being processed
+                if (data.current_status === "POTENTIAL_FALL" || data.current_status === "ALERT_ESCALATED") {
+                    processingLabel.textContent = "Processing detected fall event from video…";
+                } else {
+                    processingLabel.textContent = "Processing pre-recorded fall scenario…";
+                }
+            } catch (err) {
+                console.error("Failed to fetch status", err);
+            }
+        }
+
+        async function fetchLogs() {
+            try {
+                const res = await fetch("/logs");
+                const logs = await res.json();
+                logBody.innerHTML = "";
+
+                if (!logs || logs.length === 0) {
+                    const tr = document.createElement("tr");
+                    const td = document.createElement("td");
+                    td.colSpan = 5;
+                    td.textContent = "No events logged yet.";
+                    td.style.color = "#6b7280";
+                    tr.appendChild(td);
+                    logBody.appendChild(tr);
+                    return;
+                }
+
+                logs.forEach(row => {
+                    const tr = document.createElement("tr");
+
+                    const tdTime = document.createElement("td");
+                    tdTime.textContent = row.timestamp || "";
+                    tr.appendChild(tdTime);
+
+                    const tdDecision = document.createElement("td");
+                    tdDecision.textContent = row.decision || "";
+                    tdDecision.classList.add("log-decision");
+                    if (row.decision) {
+                        tdDecision.classList.add(`log-decision-${row.decision}`);
+                    }
+                    tr.appendChild(tdDecision);
+
+                    const tdProb = document.createElement("td");
+                    tdProb.textContent = row.prob_fall || "";
+                    tr.appendChild(tdProb);
+
+                    const tdHR = document.createElement("td");
+                    tdHR.textContent = row.heart_rate || "";
+                    tr.appendChild(tdHR);
+
+                    const tdStatus = document.createElement("td");
+                    tdStatus.textContent = row.health_status || "";
+                    tr.appendChild(tdStatus);
+
+                    logBody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error("Failed to fetch logs", err);
+            }
+        }
+
+        overrideBtn.addEventListener("click", async () => {
+            if (overrideBtn.disabled) return;
+
+            try {
+                const res = await fetch("/override_alert", {
+                    method: "POST"
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    // refresh status and logs after override
+                    fetchStatus();
+                    fetchLogs();
+                }
+            } catch (err) {
+                console.error("Failed to override alert", err);
+            }
+        });
+
+        // Poll status every second, logs every 3 seconds
+        fetchStatus();
+        fetchLogs();
+        setInterval(fetchStatus, 1000);
+        setInterval(fetchLogs, 3000);
+    </script>
+</body>
+</html>

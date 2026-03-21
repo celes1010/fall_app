@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual env
+venv/
+.env
+
+# Logs & generated data
+fall_events_log.csv
+data/
+
+# Models (optional, if you don't want to push them)
+models/*.pkl
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
