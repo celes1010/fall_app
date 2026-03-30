@@ -44,25 +44,21 @@ MODEL_PATH = os.path.join("models", "fall_pose_model.pkl")
 
 THRESHOLD = 0.60
 SMOOTH_WINDOW = 8
-USE_VOICE = True          # Master toggle — set False to disable all TTS/mic
-
-MIN_FALL_FRAMES = 12      # (reserved for future geometric gating)
-HIP_DROP_THRESHOLD = 0.12 # (reserved for future geometric gating)
+USE_VOICE = True
 
 FALL_CONFIRMATION_FRAMES = 10
 MIN_NORMAL_FRAMES = 15
 
 RESET_FACTOR = 0.5
-ALERT_COOLDOWN = 30.0     # FIX: was 5s — far too short; voice interaction takes 30-60s
+ALERT_COOLDOWN = 30.0
 
 VIDEO_SOURCE = 0
 
-# Telegram config
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "")
 LOCATION_DESC = "Home - Living Room"
-LOCATION_LAT = 8.8888
-LOCATION_LON = 76.6666
+LOCATION_LAT  = 8.8888
+LOCATION_LON  = 76.6666
 
 LOG_FILE = "fall_events_log.csv"
 DB_FILE  = "fall_events.db"
@@ -75,14 +71,12 @@ def init_db():
     con = sqlite3.connect(DB_FILE)
     con.execute("""
         CREATE TABLE IF NOT EXISTS fall_events (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp     TEXT,
-            decision      TEXT,
-            reply         TEXT,
-            prob_fall     REAL,
-            heart_rate    INTEGER,
-            health_status TEXT,
-            location      TEXT
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            decision  TEXT,
+            reply     TEXT,
+            prob_fall REAL,
+            location  TEXT
         )
     """)
     con.commit()
@@ -95,9 +89,9 @@ init_db()
 # ==========================
 # LOAD MODEL
 # ==========================
-model = None
+model        = None
 feature_cols = None
-scaler = None
+scaler       = None
 n_features_model = None
 
 try:
@@ -113,8 +107,7 @@ try:
     print("[INFO] Model expects", n_features_model, "features")
     print("[INFO] Scaler loaded:", scaler is not None)
 except FileNotFoundError:
-    print(f"[ERROR] Model not found at {MODEL_PATH}")
-    print("[ERROR] Run train_model.py first, then restart the server.")
+    print(f"[ERROR] Model not found at {MODEL_PATH} — run train_model.py first.")
 except Exception as _me:
     print(f"[ERROR] Failed to load model: {_me}")
 
@@ -122,8 +115,8 @@ except Exception as _me:
 # ==========================
 # MEDIAPIPE SETUP
 # ==========================
-mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
+mp_pose           = mp.solutions.pose
+mp_drawing        = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
 pose = mp_pose.Pose(
@@ -136,30 +129,21 @@ pose = mp_pose.Pose(
 
 # ==========================
 # VOICE & SPEECH RECOGNITION
-# FIX: Complete rewrite of TTS/mic section
 # ==========================
-recognizer = sr.Recognizer()
-
-# Global lock so TTS and mic never overlap each other
-_voice_lock = threading.Lock()
+recognizer  = sr.Recognizer()
+_voice_lock = threading.Lock()   # held during TTS only
 
 
 def speak_blocking(text: str):
-    """
-    Speak text via TTS. Blocks until fully done.
-    Respects USE_VOICE flag.
-    Always creates a fresh engine to avoid re-entrancy crashes on Linux.
-    """
+    """Speak via TTS. Blocks until done. Creates a fresh engine each call."""
     if not USE_VOICE or not text:
         print("[VOICE OUT (muted)]:", text)
         return
-    # FIX: acquire lock so mic and TTS never run simultaneously
     with _voice_lock:
         try:
             print("[VOICE OUT]:", text)
             engine = pyttsx3.init()
             engine.setProperty("rate", 150)
-            # FIX: use espeak driver explicitly on Linux to avoid ALSA conflicts
             engine.say(text)
             engine.runAndWait()
             engine.stop()
@@ -170,39 +154,26 @@ def speak_blocking(text: str):
 
 def listen_reply(timeout=12, phrase_time_limit=10) -> str:
     """
-    Listen for a user voice reply.
-    Returns recognised text (lowercase) or empty string.
-    Respects USE_VOICE flag.
-
-    Lock strategy:
-      - speak_blocking holds _voice_lock while TTS plays
-      - listen_reply does NOT use _voice_lock (caller already ensures
-        speak_blocking has returned before listen_reply is called)
-      - This avoids deadlock: speak → release lock → sleep 0.8s → listen
+    Open mic and recognise speech.
+    Does NOT hold _voice_lock — the 1.2s sleep after TTS guarantees
+    speak_blocking has already returned before this is called.
     """
     if not USE_VOICE:
-        print("[VOICE IN (muted)]: Skipping mic — USE_VOICE=False")
+        print("[VOICE IN (muted)]: USE_VOICE=False")
         return ""
 
     print("[VOICE IN]: Opening microphone...")
     try:
         with sr.Microphone() as source:
-            # Calibrate outside any lock — takes ~0.8s, mic stays open
-            print("[VOICE IN]: Calibrating for ambient noise...")
+            print("[VOICE IN]: Calibrating...")
             recognizer.adjust_for_ambient_noise(source, duration=0.8)
             print("[VOICE IN]: Listening — speak now...")
-            audio = recognizer.listen(
-                source,
-                timeout=timeout,
-                phrase_time_limit=phrase_time_limit
-            )
-
-        # Recognition happens after mic is released
+            audio = recognizer.listen(source, timeout=timeout,
+                                      phrase_time_limit=phrase_time_limit)
         print("[VOICE IN]: Recognizing...")
         text = recognizer.recognize_google(audio)
         print("[VOICE IN]: Heard →", text)
         return text.lower()
-
     except sr.WaitTimeoutError:
         print("[VOICE IN]: Timeout — no speech.")
         return ""
@@ -213,9 +184,8 @@ def listen_reply(timeout=12, phrase_time_limit=10) -> str:
         print("[VOICE IN]: Google Speech API error:", e)
         return ""
     except OSError as e:
-        print("[VOICE IN]: Microphone error:", e)
-        print("[VOICE IN]: Run:  python -c \"import speech_recognition as sr; print(sr.Microphone.list_microphone_names())\"")
-        print("[VOICE IN]: Also check:  arecord -l   and   fuser /dev/snd/*")
+        print("[VOICE IN]: Mic error:", e)
+        print("[VOICE IN]: Check:  arecord -l   and   fuser /dev/snd/*")
         return ""
     except Exception as e:
         import traceback
@@ -225,20 +195,16 @@ def listen_reply(timeout=12, phrase_time_limit=10) -> str:
 
 
 # ==========================
-# DECISION LOGIC & LOGGING
+# DECISION LOGIC
 # ==========================
-
 def classify_reply(reply: str) -> str:
-    """Classify user's response into NEEDS_HELP / USER_OK / UNCERTAIN / NO_RESPONSE."""
     if not reply or not reply.strip():
         return "NO_RESPONSE"
-
     text = reply.lower()
-
     help_words = [
         "help", "hurts", "hurt", "pain", "emergency",
         "not okay", "not fine", "cant move", "cannot move",
-        "injured", "bleeding", "dizzy", "fell", "bad",
+        "injured", "bleeding", "dizzy", "bad",
         "chest", "breathe", "breathing", "head"
     ]
     ok_words = [
@@ -248,7 +214,6 @@ def classify_reply(reply: str) -> str:
         "no i'm fine", "nothing happened", "i slipped",
         "just slipped", "just fell", "i'm good"
     ]
-
     if any(w in text for w in help_words):
         return "NEEDS_HELP"
     if any(w in text for w in ok_words):
@@ -256,30 +221,10 @@ def classify_reply(reply: str) -> str:
     return "UNCERTAIN"
 
 
-def simulate_health_for_conversation(prob_fall: float):
-    """Simulate heart rate & health status (replace with real sensor data if available)."""
-    if prob_fall > 0.85:
-        heart_rate = random.randint(118, 138)
-    elif prob_fall > 0.65:
-        heart_rate = random.randint(100, 120)
-    else:
-        heart_rate = random.randint(75, 95)
-
-    if heart_rate > 120:
-        health_status = "critical"
-    elif heart_rate > 100:
-        health_status = "elevated"
-    else:
-        health_status = "stable"
-
-    return heart_rate, health_status
-
-
-def estimate_severity(prob_fall: float, heart_rate: int) -> str:
-    """Combine model probability + heart rate into LOW / MEDIUM / HIGH severity."""
-    if prob_fall > 0.9 or heart_rate > 130:
+def estimate_severity(prob_fall: float) -> str:
+    if prob_fall > 0.9:
         return "HIGH"
-    if prob_fall > 0.7 or heart_rate > 110:
+    if prob_fall > 0.7:
         return "MEDIUM"
     return "LOW"
 
@@ -298,12 +243,12 @@ Your personality:
 
 Hard rules:
 - 2 to 3 short sentences MAXIMUM. Never longer.
-- NEVER say "give me a moment", "one moment", "please hold", or any delay phrase — speak immediately and directly
+- NEVER say "give me a moment", "one moment", "please hold", or any delay phrase
 - NEVER say "I am an AI", "as your assistant", "as an AI system"
 - NEVER use bullet points or lists
 - Ask ONE question per turn — not two or three
-- LOW severity: calm and friendly, like texting a friend
-- MEDIUM severity: clearly worried but calm, like a concerned family member
+- LOW severity: calm and friendly
+- MEDIUM severity: clearly worried but calm
 - HIGH severity: urgent and serious, but never panicked
 - If they say they're okay — express genuine relief
 - If they need help — express genuine concern and urgency
@@ -312,13 +257,36 @@ Hard rules:
 
 def generate_ai_message(kind: str,
                         severity: str,
-                        heart_rate: int,
-                        health_status: str,
                         conversation_state: list,
                         last_user_reply: str = "",
                         final_decision: str = "",
                         turn: int = 0) -> str:
-    """Use OpenAI / Maya persona to generate an emotional, context-aware message."""
+    """Generate Maya's response. Always returns a string — never raises."""
+
+    # Fallback responses (used when OpenAI unavailable or fails)
+    fb_init = [
+        "Hey, are you okay?! I saw you fall — are you hurt anywhere?",
+        "Oh no, are you alright? Can you hear me? Does anything hurt?",
+        "I'm right here with you — I just saw you fall. Are you okay?",
+    ]
+    fb_follow = [
+        "I hear you. Is there any pain, or do you feel dizzy at all?",
+        "Okay, I'm with you. Can you move okay, or does something feel wrong?",
+        "Thank you for telling me. Where does it hurt the most?",
+    ]
+    fb_close = {
+        "NEEDS_HELP":  "I'm getting someone to you right now. Please stay still and breathe — help is coming.",
+        "USER_OK":     "I'm so glad you're okay! Please take it slow getting up and rest for a little while.",
+        "NO_RESPONSE": "I'm sending an alert just to be safe since I couldn't hear you. Someone will check on you.",
+        "UNCERTAIN":   "I'm letting someone know just to be safe — I want to make sure you're really alright.",
+    }
+
+    if client is None:
+        print("[AI] No OpenAI client — using fallback.")
+        if kind == "initial":  return random.choice(fb_init)
+        if kind == "followup": return random.choice(fb_follow)
+        return fb_close.get(final_decision, fb_close["UNCERTAIN"])
+
     history = []
     for m in conversation_state[-8:]:
         role = "assistant" if m["role"] == "assistant" else "user"
@@ -326,45 +294,37 @@ def generate_ai_message(kind: str,
 
     if kind == "initial":
         instruction = (
-            f"Someone just fell. Severity: {severity}. Heart rate ~{heart_rate} bpm.\n"
-            "You are Maya. Speak to them RIGHT NOW — directly and immediately.\n"
-            "Do NOT say 'give me a moment' or any delay. Do NOT introduce yourself first.\n"
+            f"Someone just fell. Severity: {severity}.\n"
+            "Speak to them RIGHT NOW — directly and immediately.\n"
+            "Do NOT introduce yourself or use delay phrases.\n"
             "Start with genuine concern — ask if they're okay and if anything hurts.\n"
-            "Sound like a real person who just saw a friend fall. 2-3 sentences."
+            "2-3 sentences, sound like a real person who just saw a friend fall."
         )
     elif kind == "followup":
         lr = last_user_reply if last_user_reply else "they didn't respond"
         instruction = (
             f"The person just said: \"{lr}\"\n"
-            f"This is turn {turn + 1}. Respond naturally and empathetically to exactly what they said.\n"
-            "Acknowledge their words with genuine emotion. Then ask ONE follow-up question.\n"
-            "If they seem okay, express relief but gently check one more thing.\n"
-            "If they seem hurt, express concern and ask where or what hurts.\n"
+            f"Turn {turn + 1}. Respond naturally and empathetically to exactly what they said.\n"
+            "Acknowledge with genuine emotion, then ask ONE follow-up question.\n"
             "2-3 sentences. Sound like a caring human, not a checklist."
         )
     else:  # closing
         phrases = {
-            "NEEDS_HELP":  "I'm alerting someone to come to you right now. Please try to stay still and breathe slowly — help is on the way.",
-            "USER_OK":     "I'm so relieved you're okay! Please take it really slow getting up, and rest for a bit if you need to.",
-            "NO_RESPONSE": "I couldn't hear you clearly so I'm alerting someone just to be safe — it's always better to check.",
-            "UNCERTAIN":   "I'm going to let someone know just to be safe, because I want to make sure you're truly alright.",
+            "NEEDS_HELP":  "I'm alerting someone to come to you right now. Please stay still and breathe — help is on the way.",
+            "USER_OK":     "I'm so relieved you're okay! Please take it really slow getting up.",
+            "NO_RESPONSE": "I couldn't hear you clearly so I'm alerting someone just to be safe.",
+            "UNCERTAIN":   "I'm going to let someone know just to be safe.",
         }
         action = phrases.get(final_decision, phrases["UNCERTAIN"])
         instruction = (
             f"Final decision: {final_decision}. Severity: {severity}.\n"
             f"Tell them warmly: {action}\n"
-            "Add one simple, gentle safety tip if it fits naturally.\n"
-            "End on a warm, caring note. 2-3 sentences. Sound genuinely human."
+            "Add one gentle safety tip. End on a warm note. 2-3 sentences."
         )
 
     messages = [{"role": "system", "content": MAYA_SYSTEM}]
     messages.extend(history)
     messages.append({"role": "user", "content": instruction})
-
-    # Fall through to fallbacks if client failed to init
-    if client is None:
-        print("[AI WARN] No OpenAI client — using fallback response.")
-        raise RuntimeError("client is None")
 
     try:
         resp = client.chat.completions.create(
@@ -375,79 +335,44 @@ def generate_ai_message(kind: str,
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        print(f"[AI WARN] {e}")
-        fb_init = [
-            "Hey, are you okay?! I saw you fall — are you hurt anywhere?",
-            "Oh no, are you alright? Can you hear me? Does anything hurt?",
-            "I'm right here with you — I just saw you fall. Are you okay?",
-        ]
-        fb_follow = [
-            "I hear you. Can you tell me — is there any pain, or do you feel dizzy at all?",
-            "Okay, I'm with you. Can you move okay, or does something feel wrong?",
-            "Thank you for telling me. Where does it hurt the most?",
-        ]
-        fb_close = {
-            "NEEDS_HELP":  "I'm getting someone to you right now. Please stay still and breathe — help is coming.",
-            "USER_OK":     "I'm so glad you're okay! Please take it slow getting up and rest for a little while.",
-            "NO_RESPONSE": "I'm sending an alert just to be safe since I couldn't hear you. Someone will check on you.",
-            "UNCERTAIN":   "I'm letting someone know just to be safe — I want to make sure you're really alright.",
-        }
+        print(f"[AI WARN] {e} — using fallback.")
         if kind == "initial":  return random.choice(fb_init)
         if kind == "followup": return random.choice(fb_follow)
         return fb_close.get(final_decision, fb_close["UNCERTAIN"])
 
 
-def log_event(decision: str,
-              reply: str,
-              prob_fall: float,
-              heart_rate: int = None,
-              health_status: str = None):
-    """Write fall event to SQLite (primary) and CSV (backup)."""
+# ==========================
+# LOGGING & ALERTS
+# ==========================
+def log_event(decision: str, reply: str, prob_fall: float):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if heart_rate is None:
-        heart_rate = random.randint(110, 140) if decision == "NEEDS_HELP" else random.randint(70, 100)
-    if health_status is None:
-        if heart_rate > 120:
-            health_status = "critical"
-        elif heart_rate > 100:
-            health_status = "elevated"
-        else:
-            health_status = "stable"
-
-    # SQLite
     try:
         con = sqlite3.connect(DB_FILE)
-        con.execute("""
-            INSERT INTO fall_events
-                (timestamp, decision, reply, prob_fall, heart_rate, health_status, location)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (ts, decision, reply or "", round(prob_fall, 3), heart_rate, health_status, LOCATION_DESC))
+        con.execute(
+            "INSERT INTO fall_events (timestamp,decision,reply,prob_fall,location) VALUES (?,?,?,?,?)",
+            (ts, decision, reply or "", round(prob_fall, 3), LOCATION_DESC)
+        )
         con.commit()
         con.close()
         print(f"[DB] Saved → {decision}  prob={prob_fall:.3f}")
     except Exception as e:
         print(f"[DB ERROR] {e}")
 
-    # CSV backup
-    file_exists = os.path.exists(LOG_FILE)
+    exists = os.path.exists(LOG_FILE)
     with open(LOG_FILE, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["timestamp", "decision", "reply",
-                             "prob_fall", "heart_rate", "health_status"])
-        writer.writerow([ts, decision, reply or "", f"{prob_fall:.3f}", heart_rate, health_status])
+        w = csv.writer(f)
+        if not exists:
+            w.writerow(["timestamp", "decision", "reply", "prob_fall"])
+        w.writerow([ts, decision, reply or "", f"{prob_fall:.3f}"])
 
-    return ts, heart_rate, health_status
+    return ts
 
 
-def send_telegram_alert(decision: str, reply: str, prob_fall: float,
-                        heart_rate: int = 0, health_status: str = "unknown"):
-    """Send a formatted alert via Telegram Bot API."""
+def send_telegram_alert(decision: str, reply: str, prob_fall: float):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("[TELEGRAM] Not configured — skipping.")
         return
-
     icons = {
         "NEEDS_HELP":  "🆘 Person needs immediate help!",
         "NO_RESPONSE": "⚠️ No response — treating as emergency.",
@@ -457,13 +382,11 @@ def send_telegram_alert(decision: str, reply: str, prob_fall: float,
     lines = [
         "🚨 FALL DETECTED", "",
         icons.get(decision, f"Decision: {decision}"), "",
-        f"Decision   : {decision}",
-        f"User said  : {reply or 'N/A'}",
-        f"Fall prob  : {prob_fall:.3f}",
-        f"Heart rate : {heart_rate} bpm",
-        f"Health     : {health_status}", "",
-        f"Location   : {LOCATION_DESC}",
-        f"Coords     : {LOCATION_LAT}, {LOCATION_LON}", "",
+        f"Decision  : {decision}",
+        f"User said : {reply or 'N/A'}",
+        f"Fall prob : {prob_fall:.3f}", "",
+        f"Location  : {LOCATION_DESC}",
+        f"Coords    : {LOCATION_LAT}, {LOCATION_LON}", "",
         "Please check on the person immediately.",
     ]
     try:
@@ -478,38 +401,25 @@ def send_telegram_alert(decision: str, reply: str, prob_fall: float,
         print(f"[TELEGRAM] Failed: {e}")
 
 
-def handle_alert(decision: str,
-                 reply: str,
-                 prob_fall: float,
-                 heart_rate: int = None,
-                 health_status: str = None):
-    """Log event, send Telegram if needed, update detector state."""
+def handle_alert(decision: str, reply: str, prob_fall: float):
     global detector
-
     needs = decision in ("NEEDS_HELP", "NO_RESPONSE", "UNCERTAIN")
     if needs:
         print(f"\n[ALERT] {decision}  prob={prob_fall:.3f}")
-        send_telegram_alert(decision, reply, prob_fall,
-                            heart_rate=heart_rate or 0,
-                            health_status=health_status or "unknown")
+        send_telegram_alert(decision, reply, prob_fall)
     else:
         print(f"\n[INFO] User confirmed OK  prob={prob_fall:.3f}")
 
-    ts, hr, hs = log_event(decision, reply, prob_fall,
-                           heart_rate=heart_rate,
-                           health_status=health_status)
+    ts = log_event(decision, reply, prob_fall)
 
     if detector is not None:
-        detector.state.update({
-            "last_event_time": ts,
-            "last_health": {"heart_rate": hr, "health_status": hs},
-        })
+        detector.state["last_event_time"] = ts
         detector.state["fall_count"] += 1
         if needs:
             detector.state["escalated_count"] += 1
-            detector.state["current_status"] = "ALERT_ESCALATED"
+            detector.state["current_status"]   = "ALERT_ESCALATED"
         else:
-            detector.state["current_status"] = "NORMAL"
+            detector.state["current_status"]   = "NORMAL"
 
 
 # ==========================
@@ -524,56 +434,53 @@ class FallDetector:
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         self.cap.set(cv2.CAP_PROP_FPS, 30)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # FIX: buffer 1 avoids stale frames
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
         self.prob_history = deque(maxlen=SMOOTH_WINDOW)
-        self.frame_idx = 0
+        self.frame_idx    = 0
 
         self.high_prob_counter = 0
-        self.low_prob_counter = 0
+        self.low_prob_counter  = 0
 
-        self.above_threshold = False
-        self.exit_threshold = THRESHOLD * RESET_FACTOR
-        self.last_alert_time = 0.0
+        self.above_threshold             = False
+        self.exit_threshold              = THRESHOLD * RESET_FACTOR
+        self.last_alert_time             = 0.0
         self.alert_sent_for_current_fall = False
 
-        self.hip_y_history = deque(maxlen=60)
+        self.hip_y_history  = deque(maxlen=60)
         self.aspect_history = deque(maxlen=60)
 
         self.state = {
-            "last_user_reply": "",
-            "last_decision": "",
-            "listening": False,
+            "last_user_reply":      "",
+            "last_decision":        "",
+            "listening":            False,
             "waiting_for_response": False,
-            "current_status": "NORMAL",
-            "last_prob": 0.0,
-            "last_event_time": None,
-            "fall_count": 0,
-            "escalated_count": 0,
-            "last_health": {"heart_rate": 0, "health_status": "stable"},
-            "conversation": []
+            "current_status":       "NORMAL",
+            "last_prob":            0.0,
+            "last_event_time":      None,
+            "fall_count":           0,
+            "escalated_count":      0,
+            "conversation":         [],
         }
 
-        self.frame_skip = 2
-        self.skip_counter = 0
-
-        self.last_landmarks = None
+        self.frame_skip       = 2
+        self.skip_counter     = 0
+        self.last_landmarks   = None
         self.last_smooth_prob = 0.0
 
         print("[INFO] FallDetector initialized")
-        print(f"[INFO] THRESHOLD={THRESHOLD}, EXIT_THRESHOLD={self.exit_threshold}")
-        print(f"[INFO] FALL_CONFIRMATION_FRAMES={FALL_CONFIRMATION_FRAMES}")
-        print(f"[INFO] MIN_NORMAL_FRAMES={MIN_NORMAL_FRAMES}")
-        print(f"[INFO] ALERT_COOLDOWN={ALERT_COOLDOWN}s")
+        print(f"[INFO] THRESHOLD={THRESHOLD}, EXIT={self.exit_threshold}, COOLDOWN={ALERT_COOLDOWN}s")
 
     def add_message(self, role: str, text: str):
-        msg = {"role": role, "text": text, "ts": datetime.now().strftime("%H:%M:%S")}
-        self.state["conversation"].append(msg)
+        self.state["conversation"].append({
+            "role": role,
+            "text": text,
+            "ts":   datetime.now().strftime("%H:%M:%S")
+        })
         if len(self.state["conversation"]) > 40:
             self.state["conversation"] = self.state["conversation"][-40:]
 
     def _is_voice_busy(self) -> bool:
-        """True if the voice thread holds the lock (TTS playing or mic open)."""
         acquired = _voice_lock.acquire(blocking=False)
         if acquired:
             _voice_lock.release()
@@ -581,66 +488,34 @@ class FallDetector:
         return True
 
     def ask_user_async(self, prob_fall: float):
-        """
-        Multi-turn voice conversation run in a background thread.
-        Improved flow:
-          Turn 0 — immediate short prompt + AI initial question
-          Turn 1 — AI follow-up based on reply
-          Turn 2 — AI second follow-up (HIGH severity only)
-          Closing — decision + safety tip
-        """
         def worker():
             try:
-                heart_rate, health_status = simulate_health_for_conversation(prob_fall)
-                severity = estimate_severity(prob_fall, heart_rate)
+                severity = estimate_severity(prob_fall)
 
-                self.state["last_health"] = {
-                    "heart_rate": heart_rate,
-                    "health_status": health_status
-                }
-                self.state["listening"] = True
+                self.state["listening"]            = True
                 self.state["waiting_for_response"] = False
 
-                conv_state = self.state["conversation"]
                 combined_reply = ""
                 final_decision = None
-
-                # FIX: number of turns depends on severity — HIGH gets 3, others get 2
-                max_turns = 3 if severity == "HIGH" else 2
+                max_turns      = 3 if severity == "HIGH" else 2
 
                 for turn in range(max_turns):
-                    # ---- Generate Maya's message ----
-                    if turn == 0:
-                        ai_msg = generate_ai_message(
-                            kind="initial",
-                            severity=severity,
-                            heart_rate=heart_rate,
-                            health_status=health_status,
-                            conversation_state=conv_state,
-                            turn=0
-                        )
-                    else:
-                        ai_msg = generate_ai_message(
-                            kind="followup",
-                            severity=severity,
-                            heart_rate=heart_rate,
-                            health_status=health_status,
-                            conversation_state=conv_state,
-                            last_user_reply=combined_reply,
-                            turn=turn
-                        )
+                    kind   = "initial" if turn == 0 else "followup"
+                    ai_msg = generate_ai_message(
+                        kind=kind,
+                        severity=severity,
+                        conversation_state=self.state["conversation"],
+                        last_user_reply=combined_reply,
+                        turn=turn
+                    )
 
-                    # Add to conversation BEFORE speaking so dashboard shows it immediately
+                    # Add to conversation before speaking — dashboard sees it immediately
                     self.add_message("assistant", ai_msg)
-
-                    # Speak — lock is held during TTS
                     speak_blocking(ai_msg)
 
-                    # Pause AFTER TTS finishes, BEFORE mic opens
-                    # Gives speaker time to stop vibrating and lets user prepare
+                    # Wait for speaker echo to clear before opening mic
                     time.sleep(1.2)
 
-                    # ---- Listen ----
                     print(f"[INFO] Turn {turn + 1}/{max_turns}: Listening...")
                     self.state["waiting_for_response"] = True
                     reply = listen_reply(timeout=12, phrase_time_limit=10)
@@ -651,104 +526,89 @@ class FallDetector:
                         combined_reply = (combined_reply + " " + reply).strip()
                     else:
                         self.add_message("user", "[no response]")
-                        print(f"[INFO] No speech detected on turn {turn + 1}.")
+                        print(f"[INFO] No speech on turn {turn + 1}.")
 
-                    # ---- Classify ----
                     reply_class = classify_reply(reply)
-                    print(f"[INFO] Turn {turn + 1} reply class: {reply_class}")
+                    print(f"[INFO] Turn {turn + 1} → {reply_class}")
 
-                    # Early exit: clear help request
                     if reply_class == "NEEDS_HELP":
                         final_decision = "NEEDS_HELP"
                         break
 
-                    # Early exit: user is clearly fine and severity is not HIGH
                     if reply_class == "USER_OK" and severity != "HIGH":
                         if turn >= 1:
                             final_decision = "USER_OK"
                             break
-                        # First turn OK for LOW/MEDIUM: confirm with one more question
                         continue
 
-                # ---- Determine final outcome if not already set ----
+                # Final decision
                 if final_decision is None:
                     if not combined_reply.strip():
                         final_decision = "NO_RESPONSE"
                     elif severity == "HIGH":
-                        # HIGH severity: even OK reply gets UNCERTAIN unless unambiguous
-                        last_class = classify_reply(combined_reply)
-                        final_decision = "USER_OK" if last_class == "USER_OK" else "NEEDS_HELP"
+                        lc = classify_reply(combined_reply)
+                        final_decision = "USER_OK" if lc == "USER_OK" else "NEEDS_HELP"
                     elif severity == "MEDIUM":
-                        last_class = classify_reply(combined_reply)
-                        final_decision = "USER_OK" if last_class == "USER_OK" else "UNCERTAIN"
+                        lc = classify_reply(combined_reply)
+                        final_decision = "USER_OK" if lc == "USER_OK" else "UNCERTAIN"
                     else:
                         final_decision = "USER_OK"
 
                 print(f"[INFO] Final decision: {final_decision}")
 
-                # ---- Closing message ----
-                self.state["waiting_for_response"] = False
                 closing_msg = generate_ai_message(
                     kind="closing",
                     severity=severity,
-                    heart_rate=heart_rate,
-                    health_status=health_status,
-                    conversation_state=conv_state,
+                    conversation_state=self.state["conversation"],
                     final_decision=final_decision
                 )
                 self.add_message("assistant", closing_msg)
                 speak_blocking(closing_msg)
 
                 self.state["last_user_reply"] = combined_reply
-                self.state["last_decision"] = final_decision
+                self.state["last_decision"]   = final_decision
 
-                handle_alert(final_decision, combined_reply, prob_fall,
-                             heart_rate=heart_rate, health_status=health_status)
+                handle_alert(final_decision, combined_reply, prob_fall)
 
             except Exception as e:
                 import traceback
                 print(f"[ERROR] Voice interaction failed: {e}")
                 traceback.print_exc()
             finally:
-                self.state["listening"] = False
+                self.state["listening"]            = False
                 self.state["waiting_for_response"] = False
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _apply_scaler(self, feat_vec: np.ndarray) -> np.ndarray:
-        """Apply scaler if one was saved with the model, else pass through."""
         if scaler is not None:
             return scaler.transform(feat_vec.reshape(1, -1))[0]
         return feat_vec
 
     def generate_frames(self):
-        """Generator yielding MJPEG frames for the /video_feed route."""
         while True:
             ret, frame = self.cap.read()
             if not ret:
                 time.sleep(0.05)
                 continue
 
-            self.frame_idx += 1
-            h, w, _ = frame.shape
+            self.frame_idx    += 1
+            h, w, _            = frame.shape
+            self.skip_counter  += 1
+            should_process     = (self.skip_counter % self.frame_skip == 0)
+            smooth_prob        = self.last_smooth_prob
 
-            self.skip_counter += 1
-            should_process_pose = (self.skip_counter % self.frame_skip == 0)
-
-            smooth_prob = self.last_smooth_prob
-
-            if should_process_pose:
-                small_frame = cv2.resize(frame, (320, 240))
-                img_rgb = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
-                results = pose.process(img_rgb)
+            if should_process:
+                small   = cv2.resize(frame, (320, 240))
+                rgb     = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
+                results = pose.process(rgb)
 
                 if results.pose_landmarks:
-                    lm_list = results.pose_landmarks.landmark
+                    lm_list             = results.pose_landmarks.landmark
                     self.last_landmarks = results.pose_landmarks
 
                     feat_vec = landmarks_to_feature_vector(lm_list)
 
-                    # ---- Feature length alignment ----
                     if n_features_model is not None and feat_vec.shape[0] != n_features_model:
                         if feat_vec.shape[0] > n_features_model:
                             feat_vec = feat_vec[:n_features_model]
@@ -756,7 +616,6 @@ class FallDetector:
                             pad = np.zeros(n_features_model - feat_vec.shape[0], dtype=np.float32)
                             feat_vec = np.concatenate([feat_vec, pad])
 
-                    # FIX: apply scaler before prediction
                     feat_vec = self._apply_scaler(feat_vec)
                     X = feat_vec.reshape(1, -1)
 
@@ -766,41 +625,34 @@ class FallDetector:
                         except Exception:
                             prob = float(model.predict(X)[0])
                     else:
-                        prob = 0.0  # model not loaded — show camera but no detection
+                        prob = 0.0
 
                     self.prob_history.append(prob)
                     smooth_prob = float(np.mean(self.prob_history))
                     self.last_smooth_prob = smooth_prob
 
-                    # Hip tracking
                     try:
                         l_hip = lm_list[mp_pose.PoseLandmark.LEFT_HIP.value]
                         r_hip = lm_list[mp_pose.PoseLandmark.RIGHT_HIP.value]
-                        hip_y = (l_hip.y + r_hip.y) / 2.0
+                        self.hip_y_history.append((l_hip.y + r_hip.y) / 2.0)
                     except Exception:
-                        hip_y = 0.5
-                    self.hip_y_history.append(hip_y)
+                        pass
 
-                    # Aspect ratio tracking
-                    xs = [lm.x for lm in lm_list]
-                    ys = [lm.y for lm in lm_list]
+                    xs    = [lm.x for lm in lm_list]
+                    ys    = [lm.y for lm in lm_list]
                     box_h = max(ys) - min(ys)
                     box_w = max(xs) - min(xs)
-                    aspect = box_h / max(0.01, box_w)
-                    self.aspect_history.append(aspect)
+                    self.aspect_history.append(box_h / max(0.01, box_w))
 
                 else:
                     self.prob_history.append(0.0)
                     smooth_prob = float(np.mean(self.prob_history)) if self.prob_history else 0.0
                     self.last_smooth_prob = smooth_prob
-                    self.last_landmarks = None
+                    self.last_landmarks   = None
 
-            # ---- Draw skeleton ----
             if self.last_landmarks is not None:
                 mp_drawing.draw_landmarks(
-                    frame,
-                    self.last_landmarks,
-                    mp_pose.POSE_CONNECTIONS,
+                    frame, self.last_landmarks, mp_pose.POSE_CONNECTIONS,
                     landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
                 )
                 lm_list = self.last_landmarks.landmark
@@ -810,94 +662,79 @@ class FallDetector:
                 x_max = int(min(w - 1, max(xs) * w))
                 y_min = int(max(0, min(ys) * h))
                 y_max = int(min(h - 1, max(ys) * h))
-                box_color = (0, 255, 0) if smooth_prob < THRESHOLD else (0, 0, 255)
-                cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), box_color, 2)
+                cv2.rectangle(frame, (x_min, y_min), (x_max, y_max),
+                              (0, 255, 0) if smooth_prob < THRESHOLD else (0, 0, 255), 2)
 
             self.state["last_prob"] = smooth_prob
 
-            # ---- Overlays ----
             color = (0, 255, 0) if smooth_prob < THRESHOLD else (0, 0, 255)
             cv2.putText(frame, f"Fall Prob: {smooth_prob:.3f}",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
-            current_time = time.time()
+            current_time     = time.time()
             time_since_alert = current_time - self.last_alert_time if self.last_alert_time > 0 else 999
-            cooldown_left = max(0, ALERT_COOLDOWN - time_since_alert)
+            cooldown_left    = max(0, ALERT_COOLDOWN - time_since_alert)
 
             cv2.putText(frame, f"Cooldown: {cooldown_left:.1f}s",
                         (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
 
             if self.state["last_decision"]:
-                dec_color = (0, 255, 0) if self.state["last_decision"] == "USER_OK" else (0, 0, 255)
                 cv2.putText(frame, f"Decision: {self.state['last_decision']}",
-                            (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, dec_color, 2)
+                            (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                            (0, 255, 0) if self.state["last_decision"] == "USER_OK" else (0, 0, 255), 2)
 
-            cv2.putText(
-                frame,
-                f"High: {self.high_prob_counter}/{FALL_CONFIRMATION_FRAMES} "
-                f"| Low: {self.low_prob_counter}/{MIN_NORMAL_FRAMES}",
-                (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1
-            )
+            cv2.putText(frame,
+                        f"High:{self.high_prob_counter}/{FALL_CONFIRMATION_FRAMES} "
+                        f"Low:{self.low_prob_counter}/{MIN_NORMAL_FRAMES}",
+                        (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
             if self.state["listening"]:
                 label = "LISTENING..." if self.state["waiting_for_response"] else "PROCESSING..."
-                cv2.putText(frame, label, (10, 150),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                cv2.putText(frame, label, (10, 150), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.7, (0, 255, 255), 2)
 
             if smooth_prob >= THRESHOLD:
                 cv2.rectangle(frame, (0, 0), (w - 1, h - 1), (0, 0, 255), 3)
 
-            # ===== FALL DETECTION STATE MACHINE =====
-
-            # --- Recovery counter ---
+            # Fall state machine
             if smooth_prob < self.exit_threshold:
-                self.low_prob_counter += 1
-                self.high_prob_counter = 0
+                self.low_prob_counter  += 1
+                self.high_prob_counter  = 0
             else:
-                self.low_prob_counter = 0
+                self.low_prob_counter   = 0
 
             if self.low_prob_counter >= MIN_NORMAL_FRAMES:
                 if self.above_threshold:
-                    print("[INFO] Sustained recovery — resetting fall state")
-                self.above_threshold = False
+                    print("[INFO] Recovery — resetting fall state")
+                self.above_threshold             = False
                 self.alert_sent_for_current_fall = False
-                self.high_prob_counter = 0
+                self.high_prob_counter           = 0
                 if self.state["current_status"] != "ALERT_ESCALATED":
                     self.state["current_status"] = "NORMAL"
 
-            # --- High probability counter ---
             if smooth_prob >= THRESHOLD:
                 self.high_prob_counter += 1
-
                 if self.high_prob_counter >= FALL_CONFIRMATION_FRAMES:
                     self.above_threshold = True
-
                     if self.state["current_status"] != "ALERT_ESCALATED":
                         self.state["current_status"] = "POTENTIAL_FALL"
-
-                    # FIX: also check _is_voice_busy() to prevent triggering while
-                    #      TTS is playing (avoids mic picking up the speaker)
                     if (
                         not self.alert_sent_for_current_fall
                         and not self.state["waiting_for_response"]
                         and not self.state["listening"]
                         and not self._is_voice_busy()
-                        and (time_since_alert >= ALERT_COOLDOWN)
+                        and time_since_alert >= ALERT_COOLDOWN
                     ):
                         self.alert_sent_for_current_fall = True
                         self.last_alert_time = current_time
-                        print(f"[ALERT] CONFIRMED FALL at frame {self.frame_idx} "
-                              f"(prob={smooth_prob:.3f}, counter={self.high_prob_counter})")
+                        print(f"[ALERT] FALL — frame {self.frame_idx}, prob={smooth_prob:.3f}")
                         self.ask_user_async(smooth_prob)
             else:
                 self.high_prob_counter = 0
 
-            # ---- JPEG encode and yield ----
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 70]
-            ret2, buffer = cv2.imencode('.jpg', frame, encode_param)
+            ret2, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
             if not ret2:
                 continue
-
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
@@ -910,7 +747,7 @@ class FallDetector:
 # ==========================
 # FLASK APPLICATION
 # ==========================
-app = Flask(__name__)
+app      = Flask(__name__)
 detector = None
 
 
@@ -929,44 +766,37 @@ def index():
 @app.route("/video_feed")
 def video_feed():
     det = get_detector()
-    return Response(
-        det.generate_frames(),
-        mimetype="multipart/x-mixed-replace; boundary=frame"
-    )
+    return Response(det.generate_frames(),
+                    mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 @app.route("/status")
 def status():
-    det = get_detector()
+    det      = get_detector()
     listening = det.state["listening"]
     waiting   = det.state["waiting_for_response"]
-    # ai_speaking = TTS is active (lock held) but not yet listening for reply
-    ai_speaking = listening and not waiting
     return jsonify({
-        "current_status":     det.state["current_status"],
-        "last_prob":          round(det.state["last_prob"], 3),   # JS reads last_prob
-        "last_probability":   round(det.state["last_prob"], 3),   # keep for compatibility
-        "fall_count":         det.state["fall_count"],
-        "escalated_count":    det.state["escalated_count"],
-        "listening":          listening,
+        "current_status":       det.state["current_status"],
+        "last_prob":            round(det.state["last_prob"], 3),
+        "fall_count":           det.state["fall_count"],
+        "escalated_count":      det.state["escalated_count"],
+        "listening":            listening,
         "waiting_for_response": waiting,
-        "waiting_response":   waiting,          # alias — dashboard JS uses this spelling
-        "ai_speaking":        ai_speaking,
-        "last_decision":      det.state["last_decision"],
-        "last_event_time":    det.state["last_event_time"],
-        "last_health":        det.state["last_health"],
+        "ai_speaking":          listening and not waiting,
+        "last_decision":        det.state["last_decision"],
+        "last_event_time":      det.state["last_event_time"],
     })
 
 
 @app.route("/conversation")
 def conversation():
     det = get_detector()
-    return jsonify(det.state["conversation"])
+    # Return empty list (not 404) if no conversation yet
+    return jsonify(det.state.get("conversation", []))
 
 
 @app.route("/logs")
 def logs():
-    """Serve event log — SQLite primary, CSV fallback."""
     try:
         con = sqlite3.connect(DB_FILE)
         con.row_factory = sqlite3.Row
@@ -976,26 +806,41 @@ def logs():
         con.close()
         return jsonify([dict(r) for r in rows])
     except Exception:
-        # Fallback to CSV
         if not os.path.exists(LOG_FILE):
             return jsonify([])
         with open(LOG_FILE, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            return jsonify(list(reader))
+            return jsonify(list(csv.DictReader(f)))
 
 
 @app.route("/reset", methods=["POST"])
 def reset():
     det = get_detector()
-    det.above_threshold = False
-    det.alert_sent_for_current_fall = False
-    det.high_prob_counter = 0
-    det.low_prob_counter = 0
-    det.state["current_status"] = "NORMAL"
-    det.state["last_decision"] = ""
-    det.state["listening"] = False
+    det.above_threshold              = False
+    det.alert_sent_for_current_fall  = False
+    det.high_prob_counter            = 0
+    det.low_prob_counter             = 0
+    det.state["current_status"]      = "NORMAL"
+    det.state["last_decision"]       = ""
+    det.state["listening"]           = False
     det.state["waiting_for_response"] = False
     return jsonify({"status": "reset_done"})
+
+
+@app.route("/override_alert", methods=["POST"])
+def override_alert():
+    """Cancel a false alarm — resets state and logs the override."""
+    det = get_detector()
+    det.above_threshold              = False
+    det.alert_sent_for_current_fall  = False
+    det.high_prob_counter            = 0
+    det.low_prob_counter             = 0
+    det.state["current_status"]      = "NORMAL"
+    det.state["last_decision"]       = "OVERRIDE_OK"
+    det.state["listening"]           = False
+    det.state["waiting_for_response"] = False
+    det.add_message("assistant", "False alarm — event cancelled by user.")
+    log_event("OVERRIDE_OK", "manual override", det.state["last_prob"])
+    return jsonify({"status": "override_done"})
 
 
 @app.route("/health")
@@ -1010,7 +855,6 @@ def health():
     })
 
 
-# FIX: /shutdown used deprecated werkzeug hook (removed in Flask 2.x)
 @app.route("/shutdown", methods=["POST"])
 def shutdown():
     global detector
@@ -1021,25 +865,19 @@ def shutdown():
 
 
 if __name__ == "__main__":
-    # Startup checklist — warn but don't crash if things are missing
-    print("\n" + "="*50)
+    print("\n" + "="*52)
     print("[STARTUP] Guardian Fall Detection")
-    print(f"  Model loaded  : {model is not None}  ({MODEL_PATH})")
-    print(f"  Scaler loaded : {scaler is not None}")
-    print(f"  OpenAI ready  : {client is not None}")
-    print(f"  Voice enabled : {USE_VOICE}")
-    print(f"  Telegram      : {bool(TELEGRAM_BOT_TOKEN)}")
-    print("="*50 + "\n")
+    print(f"  Model   : {model is not None}  ({MODEL_PATH})")
+    print(f"  Scaler  : {scaler is not None}")
+    print(f"  OpenAI  : {client is not None}")
+    print(f"  Voice   : {USE_VOICE}")
+    print(f"  Telegram: {bool(TELEGRAM_BOT_TOKEN)}")
+    print("="*52 + "\n")
     if model is None:
-        print("[WARN] No model loaded — fall detection disabled. Run train_model.py first.")
+        print("[WARN] No model — fall detection disabled. Run train_model.py first.")
     try:
-        print("[INFO] Fall Detection Web App → http://localhost:5000")
-        app.run(
-            host="0.0.0.0",
-            port=5000,
-            debug=False,
-            threaded=True  # Required: voice thread runs alongside frame thread
-        )
+        print("[INFO] → http://localhost:5000")
+        app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
     finally:
         if detector:
             detector.release()

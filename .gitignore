@@ -9,6 +9,7 @@ venv/
 # Logs & generated data
 fall_events_log.csv
 data/
+.db
 
 # Models (optional, if you don't want to push them)
 models/*.pkl

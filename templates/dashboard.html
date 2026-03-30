@@ -1,549 +1,280 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Fall Detection Dashboard</title>
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: radial-gradient(circle at top, #1f2937 0, #020617 50%, #000 100%);
-            color: #e5e7eb;
-            min-height: 100vh;
-            padding: 24px;
-        }
-        h1 {
-            font-size: 1.8rem;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        .subtitle {
-            font-size: 0.9rem;
-            color: #9ca3af;
-            margin-bottom: 20px;
-        }
-        .layout {
-            display: grid;
-            grid-template-columns: 2.1fr 1.1fr;
-            gap: 20px;
-        }
-        @media (max-width: 950px) {
-            .layout {
-                grid-template-columns: 1fr;
-            }
-        }
-        .card {
-            background: rgba(15, 23, 42, 0.95);
-            border-radius: 14px;
-            padding: 16px 18px;
-            border: 1px solid rgba(148, 163, 184, 0.15);
-            box-shadow: 0 18px 40px rgba(0,0,0,0.45);
-        }
-        .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-        .card-title {
-            font-size: 0.95rem;
-            font-weight: 600;
-        }
-        .badge {
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-        .badge-normal {
-            background: rgba(34, 197, 94, 0.15);
-            color: #4ade80;
-            border: 1px solid rgba(34, 197, 94, 0.4);
-        }
-        .badge-potential {
-            background: rgba(234, 179, 8, 0.1);
-            color: #facc15;
-            border: 1px solid rgba(234, 179, 8, 0.4);
-        }
-        .badge-escalated {
-            background: rgba(239, 68, 68, 0.15);
-            color: #f87171;
-            border: 1px solid rgba(239, 68, 68, 0.5);
-        }
-        .badge-init {
-            background: rgba(59, 130, 246, 0.15);
-            color: #93c5fd;
-            border: 1px solid rgba(59, 130, 246, 0.4);
-        }
-
-        .video-wrapper {
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            background: #020617;
-        }
-        .video-wrapper img {
-            width: 100%;
-            display: block;
-        }
-        .video-footer {
-            display: flex;
-            justify-content: space-between;
-            padding-top: 8px;
-            font-size: 0.8rem;
-            color: #9ca3af;
-        }
-        .dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 999px;
-            background: #22c55e;
-            margin-right: 6px;
-            box-shadow: 0 0 10px rgba(34, 197, 94, 0.8);
-        }
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .metric-card {
-            background: rgba(15, 23, 42, 0.85);
-            border-radius: 10px;
-            padding: 10px 11px;
-            border: 1px solid rgba(75, 85, 99, 0.6);
-        }
-        .metric-label {
-            font-size: 0.75rem;
-            color: #9ca3af;
-            margin-bottom: 4px;
-        }
-        .metric-value {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-        .metric-sub {
-            font-size: 0.72rem;
-            color: #6b7280;
-            margin-top: 2px;
-        }
-        .status-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 6px;
-            font-size: 0.8rem;
-            color: #9ca3af;
-        }
-        .status-pill {
-            padding: 3px 8px;
-            background: rgba(31, 41, 55, 0.9);
-            border-radius: 999px;
-            border: 1px solid rgba(55, 65, 81, 0.8);
-        }
-        .status-pill-listening {
-            border-color: rgba(59,130,246,0.9);
-            color: #bfdbfe;
-            box-shadow: 0 0 15px rgba(59,130,246,0.6);
-        }
-        .status-pill-processing {
-            border-color: rgba(234,179,8,0.9);
-            color: #fde68a;
-        }
-        .controls {
-            margin-top: 12px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-        }
-        .btn {
-            border: none;
-            border-radius: 999px;
-            padding: 7px 14px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .btn-override {
-            background: linear-gradient(135deg, #ef4444, #b91c1c);
-            color: white;
-            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.55);
-        }
-        .btn-override:active {
-            transform: translateY(1px);
-            box-shadow: none;
-        }
-        .btn-disabled {
-            background: #1f2937;
-            color: #6b7280;
-            box-shadow: none;
-            cursor: default;
-        }
-        .tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 0.75rem;
-            color: #9ca3af;
-        }
-        .tag-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 999px;
-        }
-        .tag-dot-yellow {
-            background: #facc15;
-        }
-        .tag-dot-red {
-            background: #f97373;
-        }
-        .tag-dot-green {
-            background: #4ade80;
-        }
-
-        .log-card {
-            margin-top: 14px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.75rem;
-            margin-top: 6px;
-        }
-        thead {
-            background: rgba(15,23,42,0.9);
-        }
-        th, td {
-            padding: 6px 5px;
-            text-align: left;
-            border-bottom: 1px solid rgba(55,65,81,0.6);
-        }
-        th {
-            font-weight: 600;
-            color: #9ca3af;
-        }
-        tbody tr:nth-child(every) {
-            background: rgba(15,23,42,0.3);
-        }
-        tbody tr:last-child td {
-            border-bottom: none;
-        }
-        .log-decision {
-            font-weight: 600;
-        }
-        .log-decision-NEEDS_HELP,
-        .log-decision_NO_RESPONSE,
-        .log-decision_UNCERTAIN {
-            color: #f97373;
-        }
-        .log-decision-USER_OK,
-        .log-decision-OVERRIDE_OK {
-            color: #4ade80;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guardian — Fall Detection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#06080f;--bg2:#0b0f1a;--bg3:#101623;--bg4:#161d2e;--border:rgba(255,255,255,.06);--border2:rgba(255,255,255,.11);--text:#dde4f0;--text2:#6b778f;--text3:#2e3a4e;--green:#00e5a0;--amber:#ffb347;--red:#ff3d5a;--blue:#3d8cff;--purple:#9d78f8;--cyan:#22d3ee;--r:16px;--rs:10px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:20px 22px 28px;overflow-x:hidden}
+body::before,body::after{content:'';position:fixed;border-radius:50%;pointer-events:none;z-index:0;filter:blur(120px);opacity:.18}
+body::before{width:480px;height:480px;background:var(--blue);top:-180px;left:-100px}
+body::after{width:360px;height:360px;background:var(--purple);bottom:-120px;right:-80px}
+body>*{position:relative;z-index:1}
+.hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.hdr-l{display:flex;align-items:center;gap:14px}
+.logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 24px rgba(61,140,255,.35);flex-shrink:0}
+.brand-title{font-family:'Syne',sans-serif;font-size:1.15rem;font-weight:700;letter-spacing:-.025em}
+.brand-sub{font-size:.67rem;color:var(--text2);margin-top:1px;font-weight:300}
+.hdr-r{display:flex;align-items:center;gap:12px}
+.live-pill{display:flex;align-items:center;gap:7px;padding:5px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:999px;font-family:'DM Mono',monospace;font-size:.67rem;color:var(--text2)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse-dot 2.4s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1;box-shadow:0 0 8px var(--green)}50%{opacity:.3;box-shadow:none}}
+.sbadge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;font-size:.67rem;font-weight:600;font-family:'Syne',sans-serif;text-transform:uppercase;letter-spacing:.07em;transition:all .35s}
+.bn{background:rgba(0,229,160,.1);color:var(--green);border:1px solid rgba(0,229,160,.28)}
+.bp{background:rgba(255,179,71,.1);color:var(--amber);border:1px solid rgba(255,179,71,.3)}
+.be{background:rgba(255,61,90,.12);color:var(--red);border:1px solid rgba(255,61,90,.35)}
+.bi{background:rgba(61,140,255,.1);color:var(--blue);border:1px solid rgba(61,140,255,.28)}
+.bdot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.layout{display:grid;grid-template-columns:1.65fr 1fr;gap:16px;align-items:start}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+.rcol{display:flex;flex-direction:column;gap:16px}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:18px;transition:border-color .3s;backdrop-filter:blur(4px);animation:fade-up .45s ease both}
+.card:nth-child(1){animation-delay:.05s}.card:nth-child(2){animation-delay:.12s}.card:nth-child(3){animation-delay:.19s}.card:nth-child(4){animation-delay:.26s}
+.card.ca{border-color:rgba(255,61,90,.4);box-shadow:0 0 30px rgba(255,61,90,.06)}
+.card.cp{border-color:rgba(255,179,71,.3)}
+@keyframes fade-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.ct{font-family:'DM Mono',monospace;font-size:.6rem;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-bottom:14px}
+.vwrap{position:relative;border-radius:12px;overflow:hidden;background:var(--bg4);aspect-ratio:4/3;border:1px solid var(--border)}
+.vwrap img{width:100%;height:100%;object-fit:cover;display:block}
+.vwrap::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:1}
+.vcorner{position:absolute;width:14px;height:14px;z-index:2}
+.vcorner.tl{top:10px;left:10px;border-top:2px solid rgba(61,140,255,.6);border-left:2px solid rgba(61,140,255,.6)}
+.vcorner.tr{top:10px;right:10px;border-top:2px solid rgba(61,140,255,.6);border-right:2px solid rgba(61,140,255,.6)}
+.vcorner.bl{bottom:10px;left:10px;border-bottom:2px solid rgba(61,140,255,.6);border-left:2px solid rgba(61,140,255,.6)}
+.vcorner.br{bottom:10px;right:10px;border-bottom:2px solid rgba(61,140,255,.6);border-right:2px solid rgba(61,140,255,.6)}
+.vover{position:absolute;bottom:0;left:0;right:0;padding:14px 16px;background:linear-gradient(transparent,rgba(0,0,0,.82));display:flex;align-items:flex-end;justify-content:space-between;z-index:2}
+.prob-big{font-family:'DM Mono',monospace;font-size:1.75rem;font-weight:500;letter-spacing:-.02em;transition:color .25s;line-height:1}
+.plabel{font-size:.58rem;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;font-family:'DM Mono',monospace}
+.last-ev-val{font-family:'DM Mono',monospace;font-size:.72rem;color:rgba(255,255,255,.6)}
+.vwrap.alert-flash::after{content:'';position:absolute;inset:0;border:2px solid var(--red);border-radius:12px;animation:ring-flash 1s ease-in-out infinite;z-index:3;pointer-events:none}
+@keyframes ring-flash{0%,100%{opacity:1}50%{opacity:.15}}
+.pbar-row{display:flex;align-items:center;gap:10px;margin-top:14px}
+.pbar-track{flex:1;height:4px;background:var(--bg4);border-radius:999px;overflow:hidden}
+.pbar{height:100%;border-radius:999px;background:var(--green);transition:width .28s ease,background .28s}
+.pbar-pct{font-family:'DM Mono',monospace;font-size:.62rem;color:var(--text2);min-width:28px;text-align:right}
+.pills{display:flex;gap:8px;margin-top:13px;flex-wrap:wrap}
+.pill{padding:4px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:999px;font-size:.67rem;color:var(--text2);font-family:'DM Mono',monospace}
+.pill span{color:var(--text)}
+.vstatus{margin-top:12px;padding:10px 14px;border-radius:var(--rs);background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;gap:10px;font-size:.73rem;color:var(--text2);transition:all .3s;min-height:42px}
+.vstatus.vl{background:rgba(34,211,238,.07);border-color:rgba(34,211,238,.3);color:var(--cyan)}
+.vstatus.vs{background:rgba(157,120,248,.08);border-color:rgba(157,120,248,.3);color:var(--purple)}
+.wave{display:flex;gap:2px;align-items:center;height:16px;flex-shrink:0}
+.wave b{display:block;width:3px;border-radius:2px;background:currentColor;animation:wv 1.1s ease-in-out infinite}
+.wave b:nth-child(1){height:4px;animation-delay:0s}.wave b:nth-child(2){height:12px;animation-delay:.14s}.wave b:nth-child(3){height:7px;animation-delay:.28s}.wave b:nth-child(4){height:14px;animation-delay:.08s}.wave b:nth-child(5){height:5px;animation-delay:.22s}
+@keyframes wv{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+.obtn{margin-top:11px;width:100%;padding:10px;border-radius:var(--rs);border:1px solid rgba(255,61,90,.4);background:rgba(255,61,90,.1);color:var(--red);font-size:.73rem;font-weight:600;font-family:'Syne',sans-serif;cursor:pointer;transition:all .2s;display:none}
+.obtn:hover{background:rgba(255,61,90,.2)}.obtn.show{display:block}
+.maya-hdr{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.mavatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--blue));display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;animation:avatar-glow 4s ease-in-out infinite}
+@keyframes avatar-glow{0%,100%{box-shadow:0 0 16px rgba(157,120,248,.3)}50%{box-shadow:0 0 28px rgba(157,120,248,.6)}}
+.mname{font-family:'Syne',sans-serif;font-size:.88rem;font-weight:700}.mrole{font-size:.62rem;color:var(--text2);margin-top:1px}
+.cwrap{height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding-right:2px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.cempty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:.72rem;flex-direction:column;gap:8px;text-align:center;font-style:italic}
+.mrow{display:flex;gap:8px}.mrow.user{flex-direction:row-reverse}
+.mbub{max-width:84%;padding:9px 13px;border-radius:14px;font-size:.73rem;line-height:1.6}
+.mrow.assistant .mbub{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
+.mrow.user .mbub{background:rgba(61,140,255,.1);border:1px solid rgba(61,140,255,.2);color:var(--blue);border-bottom-right-radius:4px}
+.mts{font-size:.58rem;color:var(--text3);align-self:flex-end;white-space:nowrap;font-family:'DM Mono',monospace}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.met{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:13px 15px;position:relative;overflow:hidden}
+.met::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.met.m-falls::before{background:linear-gradient(90deg,var(--amber),transparent)}
+.met.m-esc::before{background:linear-gradient(90deg,var(--red),transparent)}
+.mlabel{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px}
+.mval{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+.msub{font-size:.6rem;color:var(--text2);margin-top:4px}
+.lscroll{max-height:175px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+table{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.65rem}
+thead{position:sticky;top:0;background:var(--bg2);z-index:1}
+th{padding:5px 6px 8px;text-align:left;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);letter-spacing:.06em;text-transform:uppercase}
+td{padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--text2)}
+tbody tr:last-child td{border-bottom:none}
+.dn,.dno{color:var(--red);font-weight:600}.du{color:var(--amber);font-weight:600}.dok,.dov{color:var(--green);font-weight:600}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
 </head>
 <body>
+<header class="hdr">
+  <div class="hdr-l">
+    <div class="logo">🛡</div>
+    <div><div class="brand-title">Guardian</div><div class="brand-sub">AI-powered fall detection &amp; emergency response</div></div>
+  </div>
+  <div class="hdr-r">
+    <div class="live-pill"><span class="live-dot"></span><span id="clock">--:--:--</span></div>
+    <div id="sbadge" class="sbadge bi"><span class="bdot"></span><span>Starting</span></div>
+  </div>
+</header>
 
-    <header>
-        <h1>Fall Detection Dashboard</h1>
-        <p class="subtitle">
-            Simulated monitoring using a pre-recorded video, pose estimation and AI-based fall detection.
-        </p>
-    </header>
+<div class="layout">
+  <div>
+    <div class="card" id="vcard">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="ct" style="margin:0">Live camera</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3)">Threshold <span style="color:var(--text2)">0.60</span></div>
+      </div>
+      <div class="vwrap" id="vwrap">
+        <img src="/video_feed" alt="Live camera feed">
+        <div class="vcorner tl"></div><div class="vcorner tr"></div>
+        <div class="vcorner bl"></div><div class="vcorner br"></div>
+        <div class="vover">
+          <div><div class="plabel">Fall probability</div><div class="prob-big" id="prob-disp">0.000</div></div>
+          <div style="text-align:right"><div class="plabel">Last event</div><div class="last-ev-val" id="last-ev">—</div></div>
+        </div>
+      </div>
+      <div class="pbar-row">
+        <div class="pbar-track"><div class="pbar" id="pbar" style="width:0%"></div></div>
+        <div class="pbar-pct" id="pbar-pct">0%</div>
+      </div>
+      <div class="pills">
+        <div class="pill">Falls <span id="fc">0</span></div>
+        <div class="pill">Escalated <span id="ec">0</span></div>
+      </div>
+      <div class="vstatus" id="vstatus">
+        <span style="font-size:16px">🎙</span><span>Maya is standing by</span>
+      </div>
+      <button class="obtn" id="obtn" onclick="doOverride()">✕ &nbsp;Cancel false alarm</button>
+    </div>
+  </div>
 
-    <main class="layout">
+  <div class="rcol">
+    <div class="card">
+      <div class="maya-hdr">
+        <div class="mavatar">🤖</div>
+        <div><div class="mname">Maya</div><div class="mrole">AI health companion</div></div>
+      </div>
+      <div class="cwrap" id="cwrap">
+        <div class="cempty">
+          <span style="font-size:24px">💬</span>
+          <span>Maya will speak here<br>when a fall is detected</span>
+        </div>
+      </div>
+    </div>
 
-        <!-- LEFT: VIDEO + STATUS -->
-        <section class="card">
-            <div class="card-header">
-                <div class="card-title">Video Feed</div>
-                <div id="status-badge" class="badge badge-init">Initialising</div>
-            </div>
+    <div class="card">
+      <div class="ct">Session metrics</div>
+      <div class="mgrid">
+        <div class="met m-falls"><div class="mlabel">Total falls</div><div class="mval" id="mf">0</div><div class="msub">this session</div></div>
+        <div class="met m-esc"><div class="mlabel">Escalated</div><div class="mval" id="me">0</div><div class="msub">alerts sent</div></div>
+      </div>
+    </div>
 
-            <div class="video-wrapper">
-                <!-- Pre-recorded video stream with overlay -->
-                <img src="{{ url_for('video_feed') }}" alt="Live fall detection feed">
-            </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="ct" style="margin:0">Event log</div>
+        <span style="font-family:'DM Mono',monospace;font-size:.58rem;color:var(--text3);text-transform:uppercase">Latest first</span>
+      </div>
+      <div class="lscroll">
+        <table>
+          <thead><tr><th>Time</th><th>Decision</th><th>Prob</th><th>User said</th></tr></thead>
+          <tbody id="lbody">
+            <tr><td colspan="4" style="color:var(--text3);text-align:center;padding:16px;font-style:italic">No events yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 
-            <div class="video-footer">
-                <div>
-                    <span class="dot"></span>
-                    <span id="processing-label">Processing pre-recorded fall scenario…</span>
-                </div>
-                <div id="time-of-day">--:--:--</div>
-            </div>
+<script>
+const $ = id => document.getElementById(id);
+setInterval(()=>{ $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 
-            <div class="status-row">
-                <div class="status-pill">
-                    Last fall probability: <span id="last-prob">0.000</span>
-                </div>
-                <div class="status-pill">
-                    Last event: <span id="last-event-time">None</span>
-                </div>
-                <div class="status-pill" id="voice-indicator">
-                    Voice assistant: Idle
-                </div>
-            </div>
+function setStatus(s) {
+  const map = {NORMAL:['bn','Normal'],POTENTIAL_FALL:['bp','Potential Fall'],ALERT_ESCALATED:['be','Alert Sent']};
+  const [cls,lbl] = map[s]||['bi',s];
+  $('sbadge').className='sbadge '+cls;
+  $('sbadge').innerHTML=`<span class="bdot"></span><span>${lbl}</span>`;
+  $('vcard').className='card'+(s==='ALERT_ESCALATED'?' ca':s==='POTENTIAL_FALL'?' cp':'');
+  $('vwrap').className='vwrap'+(s==='ALERT_ESCALATED'?' alert-flash':'');
+  $('obtn').className='obtn'+(s==='ALERT_ESCALATED'||s==='POTENTIAL_FALL'?' show':'');
+}
 
-            <div class="controls">
-                <button id="override-btn" class="btn btn-disabled" disabled>
-                    ⛔ Cancel False Alarm
-                </button>
-                <span class="tag">
-                    <span class="tag-dot tag-dot-red"></span> Alert Escalated
-                    &nbsp;&nbsp;
-                    <span class="tag-dot tag-dot-yellow"></span> Potential Fall
-                    &nbsp;&nbsp;
-                    <span class="tag-dot tag-dot-green"></span> Normal
-                </span>
-            </div>
-        </section>
+function setProb(p) {
+  const pct=Math.min(100,p*100);
+  const col=p>=0.60?'var(--red)':p>=0.35?'var(--amber)':'var(--green)';
+  $('prob-disp').textContent=p.toFixed(3);$('prob-disp').style.color=col;
+  $('pbar').style.background=col;$('pbar').style.width=pct+'%';
+  $('pbar-pct').textContent=Math.round(pct)+'%';
+}
 
-        <!-- RIGHT: HEALTH + HISTORY + LOG -->
-        <section class="card">
-            <div class="card-header">
-                <div class="card-title">Patient Context (Simulated)</div>
-                <span class="badge badge-normal">Demo Mode</span>
-            </div>
+function setVoice(listening,waiting,speaking) {
+  const el=$('vstatus');
+  const wave=`<div class="wave"><b></b><b></b><b></b><b></b><b></b></div>`;
+  if(speaking){el.className='vstatus vs';el.innerHTML=wave+`<span>Maya is speaking\u2026</span>`;}
+  else if(waiting){el.className='vstatus vl';el.innerHTML=wave+`<span>Listening \u2014 say "I'm okay" or "I need help"</span>`;}
+  else if(listening){el.className='vstatus vs';el.innerHTML=`<span style="font-size:16px">\u23F3</span><span>Processing\u2026</span>`;}
+  else{el.className='vstatus';el.innerHTML=`<span style="font-size:16px">\uD83C\uDF99</span><span>Maya is standing by</span>`;}
+}
 
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <div class="metric-label">Heart Rate</div>
-                    <div class="metric-value" id="heart-rate">0 bpm</div>
-                    <div class="metric-sub" id="health-status">--</div>
-                </div>
+function esc(t){ return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-                <div class="metric-card">
-                    <div class="metric-label">Fall History (Session)</div>
-                    <div class="metric-value">
-                        <span id="fall-count">0</span> falls
-                    </div>
-                    <div class="metric-sub">
-                        Escalated: <span id="escalated-count">0</span>
-                    </div>
-                </div>
+let _lastConvLen = -1;
 
-                <div class="metric-card">
-                    <div class="metric-label">Current Scenario</div>
-                    <div class="metric-value" id="scenario-label">Simulated home environment</div>
-                    <div class="metric-sub">Location: Living room · Single occupant</div>
-                </div>
+async function fetchConv() {
+  try {
+    const r = await fetch('/conversation');
+    if(!r.ok){ console.error('[conv] HTTP',r.status); return; }
+    const msgs = await r.json();
+    if(!Array.isArray(msgs)) return;
+    if(msgs.length === _lastConvLen) return;
+    _lastConvLen = msgs.length;
+    const w = $('cwrap');
+    if(msgs.length===0){
+      w.innerHTML=`<div class="cempty"><span style="font-size:24px">\uD83D\uDCAC</span><span>Maya will speak here<br>when a fall is detected</span></div>`;
+      return;
+    }
+    w.innerHTML = msgs.map(m=>
+      `<div class="mrow ${esc(m.role)}"><div class="mbub">${esc(m.text)}</div><div class="mts">${esc(m.ts||'')}</div></div>`
+    ).join('');
+    w.scrollTop = w.scrollHeight;
+  } catch(e){ console.error('[conv]',e); }
+}
 
-                <div class="metric-card">
-                    <div class="metric-label">System Notes</div>
-                    <div class="metric-sub" id="system-notes">
-                        Watching for transitions from standing to lying with rapid motion.
-                    </div>
-                </div>
-            </div>
+async function fetchStatus() {
+  try {
+    const r = await fetch('/status');
+    if(!r.ok){ console.error('[status] HTTP',r.status); return; }
+    const d = await r.json();
+    setStatus(d.current_status||'NORMAL');
+    setProb(d.last_prob??0);
+    setVoice(d.listening, d.waiting_for_response, d.ai_speaking);
+    $('last-ev').textContent = d.last_event_time ? d.last_event_time.slice(11) : '\u2014';
+    $('fc').textContent = d.fall_count??0;
+    $('ec').textContent = d.escalated_count??0;
+    $('mf').textContent = d.fall_count??0;
+    $('me').textContent = d.escalated_count??0;
+  } catch(e){ console.error('[status]',e); }
+}
 
-            <div class="log-card">
-                <div class="card-header" style="padding:0; margin-bottom:6px; margin-top:10px;">
-                    <div class="card-title">Recent Fall Log</div>
-                    <span style="font-size:0.75rem; color:#9ca3af;">Last 20 events</span>
-                </div>
-                <div style="max-height: 220px; overflow-y: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Decision</th>
-                                <th>Prob</th>
-                                <th>HR</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="log-body">
-                            <!-- rows injected by JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
+async function fetchLogs() {
+  try {
+    const r = await fetch('/logs');
+    if(!r.ok){ console.error('[logs] HTTP',r.status); return; }
+    const logs = await r.json();
+    if(!Array.isArray(logs)||!logs.length) return;
+    const cls={NEEDS_HELP:'dn',NO_RESPONSE:'dno',UNCERTAIN:'du',USER_OK:'dok',OVERRIDE_OK:'dov'};
+    $('lbody').innerHTML = logs.slice(0,20).map(row=>
+      `<tr><td>${esc((row.timestamp||'').slice(11))}</td><td class="${cls[row.decision]||''}">${esc(row.decision||'')}</td><td>${esc(String(row.prob_fall||''))}</td><td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((row.reply||'').slice(0,40))}</td></tr>`
+    ).join('');
+  } catch(e){ console.error('[logs]',e); }
+}
 
-    </main>
+async function doOverride() {
+  try {
+    const r = await fetch('/override_alert',{method:'POST'});
+    if(!r.ok) console.error('[override] HTTP',r.status);
+    fetchStatus(); fetchConv(); fetchLogs();
+  } catch(e){ console.error('[override]',e); }
+}
 
-    <script>
-        const statusBadge = document.getElementById("status-badge");
-        const lastProbSpan = document.getElementById("last-prob");
-        const lastEventSpan = document.getElementById("last-event-time");
-        const timeOfDaySpan = document.getElementById("time-of-day");
-        const heartRateSpan = document.getElementById("heart-rate");
-        const healthStatusSpan = document.getElementById("health-status");
-        const fallCountSpan = document.getElementById("fall-count");
-        const escalatedCountSpan = document.getElementById("escalated-count");
-        const overrideBtn = document.getElementById("override-btn");
-        const systemNotes = document.getElementById("system-notes");
-        const processingLabel = document.getElementById("processing-label");
-        const voiceIndicator = document.getElementById("voice-indicator");
-        const logBody = document.getElementById("log-body");
-
-        function setBadge(status) {
-            statusBadge.className = "badge"; // reset
-
-            if (status === "NORMAL") {
-                statusBadge.classList.add("badge-normal");
-                statusBadge.textContent = "Normal";
-                overrideBtn.disabled = true;
-                overrideBtn.className = "btn btn-disabled";
-                systemNotes.textContent = "No active alerts. Monitoring baseline posture.";
-            } else if (status === "POTENTIAL_FALL") {
-                statusBadge.classList.add("badge-potential");
-                statusBadge.textContent = "Potential Fall";
-                overrideBtn.disabled = false;
-                overrideBtn.className = "btn btn-override";
-                systemNotes.textContent = "Fall pattern detected. Awaiting voice response or manual override.";
-            } else if (status === "ALERT_ESCALATED") {
-                statusBadge.classList.add("badge-escalated");
-                statusBadge.textContent = "Alert Escalated";
-                overrideBtn.disabled = false;
-                overrideBtn.className = "btn btn-override";
-                systemNotes.textContent = "Alert sent. You can cancel as false alarm if the person is safe.";
-            } else if (status === "INITIALISING") {
-                statusBadge.classList.add("badge-init");
-                statusBadge.textContent = "Initialising";
-                overrideBtn.disabled = true;
-                overrideBtn.className = "btn btn-disabled";
-                systemNotes.textContent = "Preparing model, video and pose detection.";
-            } else {
-                statusBadge.classList.add("badge-init");
-                statusBadge.textContent = status;
-            }
-        }
-
-        function setVoiceIndicator(listening, waiting) {
-            voiceIndicator.className = "status-pill"; // reset
-            if (listening) {
-                voiceIndicator.classList.add("status-pill-listening");
-                voiceIndicator.textContent = "Voice assistant: Listening – speak now: say 'I am fine' or 'help me'";
-            } else if (waiting) {
-                voiceIndicator.classList.add("status-pill-processing");
-                voiceIndicator.textContent = "Voice assistant: Processing response…";
-            } else {
-                voiceIndicator.textContent = "Voice assistant: Idle";
-            }
-        }
-
-        async function fetchStatus() {
-            try {
-                const res = await fetch("/status");
-                const data = await res.json();
-
-                setBadge(data.current_status || "INITIALISING");
-
-                lastProbSpan.textContent = (data.last_prob ?? 0).toFixed(3);
-                lastEventSpan.textContent = data.last_event_time || "None";
-                timeOfDaySpan.textContent = data.time_of_day || "--:--:--";
-
-                const hr = data.last_health?.heart_rate ?? 0;
-                heartRateSpan.textContent = hr + " bpm";
-                healthStatusSpan.textContent = data.last_health?.health_status ?? "--";
-
-                fallCountSpan.textContent = data.fall_count ?? 0;
-                escalatedCountSpan.textContent = data.escalated_count ?? 0;
-
-                const listening = data.listening ?? false;
-                const waiting = data.waiting_for_response ?? false;
-                setVoiceIndicator(listening, waiting);
-
-                // extra hint for when a fall event is being processed
-                if (data.current_status === "POTENTIAL_FALL" || data.current_status === "ALERT_ESCALATED") {
-                    processingLabel.textContent = "Processing detected fall event from video…";
-                } else {
-                    processingLabel.textContent = "Processing pre-recorded fall scenario…";
-                }
-            } catch (err) {
-                console.error("Failed to fetch status", err);
-            }
-        }
-
-        async function fetchLogs() {
-            try {
-                const res = await fetch("/logs");
-                const logs = await res.json();
-                logBody.innerHTML = "";
-
-                if (!logs || logs.length === 0) {
-                    const tr = document.createElement("tr");
-                    const td = document.createElement("td");
-                    td.colSpan = 5;
-                    td.textContent = "No events logged yet.";
-                    td.style.color = "#6b7280";
-                    tr.appendChild(td);
-                    logBody.appendChild(tr);
-                    return;
-                }
-
-                logs.forEach(row => {
-                    const tr = document.createElement("tr");
-
-                    const tdTime = document.createElement("td");
-                    tdTime.textContent = row.timestamp || "";
-                    tr.appendChild(tdTime);
-
-                    const tdDecision = document.createElement("td");
-                    tdDecision.textContent = row.decision || "";
-                    tdDecision.classList.add("log-decision");
-                    if (row.decision) {
-                        tdDecision.classList.add(`log-decision-${row.decision}`);
-                    }
-                    tr.appendChild(tdDecision);
-
-                    const tdProb = document.createElement("td");
-                    tdProb.textContent = row.prob_fall || "";
-                    tr.appendChild(tdProb);
-
-                    const tdHR = document.createElement("td");
-                    tdHR.textContent = row.heart_rate || "";
-                    tr.appendChild(tdHR);
-
-                    const tdStatus = document.createElement("td");
-                    tdStatus.textContent = row.health_status || "";
-                    tr.appendChild(tdStatus);
-
-                    logBody.appendChild(tr);
-                });
-            } catch (err) {
-                console.error("Failed to fetch logs", err);
-            }
-        }
-
-        overrideBtn.addEventListener("click", async () => {
-            if (overrideBtn.disabled) return;
-
-            try {
-                const res = await fetch("/override_alert", {
-                    method: "POST"
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    // refresh status and logs after override
-                    fetchStatus();
-                    fetchLogs();
-                }
-            } catch (err) {
-                console.error("Failed to override alert", err);
-            }
-        });
-
-        // Poll status every second, logs every 3 seconds
-        fetchStatus();
-        fetchLogs();
-        setInterval(fetchStatus, 1000);
-        setInterval(fetchLogs, 3000);
-    </script>
+fetchStatus(); fetchConv(); fetchLogs();
+setInterval(fetchStatus, 800);
+setInterval(fetchConv,   600);
+setInterval(fetchLogs,  4000);
+</script>
 </body>
 </html>
