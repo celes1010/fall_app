@@ -38,22 +38,34 @@ except Exception as _oe:
 
 
 # ==========================
-# CONFIG
+# CONFIG — TUNED TO REDUCE FALSE POSITIVES
 # ==========================
 MODEL_PATH = os.path.join("models", "fall_pose_model.pkl")
 
-THRESHOLD = 0.60
-SMOOTH_WINDOW = 8
+# ── Detection thresholds ──
+THRESHOLD = 0.70                # FIX: raised from 0.60 → 0.70 (reduces false triggers)
+SMOOTH_WINDOW = 10              # FIX: increased from 8 → 10 (smoother probability curve)
+
+# ── Fall confirmation ──
+FALL_CONFIRMATION_FRAMES = 15   # FIX: raised from 10 → 15 (needs more sustained high-prob)
+MIN_NORMAL_FRAMES = 20          # FIX: raised from 15 → 20 (needs longer recovery to reset)
+
+# ── Geometric gating (RE-ENABLED — this was the main fix) ──
+HIP_DROP_THRESHOLD = 0.10       # hip must drop by at least 10% of frame height
+HIP_DROP_WINDOW = 20            # look back this many frames for hip drop
+ASPECT_RATIO_THRESHOLD = 1.2    # NEW: bounding box must be wider than tall (fallen = < 1.2)
+
+# ── Hysteresis & cooldown ──
+RESET_FACTOR = 0.5
+ALERT_COOLDOWN = 45.0           # FIX: raised from 30 → 45s (voice interaction takes time)
+
+# ── Voice ──
 USE_VOICE = True
 
-FALL_CONFIRMATION_FRAMES = 10
-MIN_NORMAL_FRAMES = 15
-
-RESET_FACTOR = 0.5
-ALERT_COOLDOWN = 30.0
-
+# ── Video ──
 VIDEO_SOURCE = 0
 
+# ── Telegram ──
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID   = os.getenv("TELEGRAM_CHAT_ID", "")
 LOCATION_DESC = "Home - Living Room"
@@ -131,11 +143,10 @@ pose = mp_pose.Pose(
 # VOICE & SPEECH RECOGNITION
 # ==========================
 recognizer  = sr.Recognizer()
-_voice_lock = threading.Lock()   # held during TTS only
+_voice_lock = threading.Lock()
 
 
 def speak_blocking(text: str):
-    """Speak via TTS. Blocks until done. Creates a fresh engine each call."""
     if not USE_VOICE or not text:
         print("[VOICE OUT (muted)]:", text)
         return
@@ -153,11 +164,6 @@ def speak_blocking(text: str):
 
 
 def listen_reply(timeout=12, phrase_time_limit=10) -> str:
-    """
-    Open mic and recognise speech.
-    Does NOT hold _voice_lock — the 1.2s sleep after TTS guarantees
-    speak_blocking has already returned before this is called.
-    """
     if not USE_VOICE:
         print("[VOICE IN (muted)]: USE_VOICE=False")
         return ""
@@ -185,7 +191,6 @@ def listen_reply(timeout=12, phrase_time_limit=10) -> str:
         return ""
     except OSError as e:
         print("[VOICE IN]: Mic error:", e)
-        print("[VOICE IN]: Check:  arecord -l   and   fuser /dev/snd/*")
         return ""
     except Exception as e:
         import traceback
@@ -261,9 +266,6 @@ def generate_ai_message(kind: str,
                         last_user_reply: str = "",
                         final_decision: str = "",
                         turn: int = 0) -> str:
-    """Generate Maya's response. Always returns a string — never raises."""
-
-    # Fallback responses (used when OpenAI unavailable or fails)
     fb_init = [
         "Hey, are you okay?! I saw you fall — are you hurt anywhere?",
         "Oh no, are you alright? Can you hear me? Does anything hurt?",
@@ -308,7 +310,7 @@ def generate_ai_message(kind: str,
             "Acknowledge with genuine emotion, then ask ONE follow-up question.\n"
             "2-3 sentences. Sound like a caring human, not a checklist."
         )
-    else:  # closing
+    else:
         phrases = {
             "NEEDS_HELP":  "I'm alerting someone to come to you right now. Please stay still and breathe — help is on the way.",
             "USER_OK":     "I'm so relieved you're okay! Please take it really slow getting up.",
@@ -346,7 +348,6 @@ def generate_ai_message(kind: str,
 # ==========================
 def log_event(decision: str, reply: str, prob_fall: float):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
     try:
         con = sqlite3.connect(DB_FILE)
         con.execute(
@@ -365,7 +366,6 @@ def log_event(decision: str, reply: str, prob_fall: float):
         if not exists:
             w.writerow(["timestamp", "decision", "reply", "prob_fall"])
         w.writerow([ts, decision, reply or "", f"{prob_fall:.3f}"])
-
     return ts
 
 
@@ -423,7 +423,7 @@ def handle_alert(decision: str, reply: str, prob_fall: float):
 
 
 # ==========================
-# FALL DETECTOR CLASS
+# FALL DETECTOR CLASS — WITH GEOMETRIC GATING
 # ==========================
 class FallDetector:
     def __init__(self, source=VIDEO_SOURCE):
@@ -468,8 +468,18 @@ class FallDetector:
         self.last_landmarks   = None
         self.last_smooth_prob = 0.0
 
-        print("[INFO] FallDetector initialized")
-        print(f"[INFO] THRESHOLD={THRESHOLD}, EXIT={self.exit_threshold}, COOLDOWN={ALERT_COOLDOWN}s")
+        # NEW: track geometric gate status for dashboard overlay
+        self.last_hip_drop    = 0.0
+        self.last_aspect      = 0.0
+        self.last_geo_pass    = False
+
+        print("[INFO] FallDetector initialized — WITH GEOMETRIC GATING")
+        print(f"[INFO] THRESHOLD={THRESHOLD}, EXIT={self.exit_threshold}")
+        print(f"[INFO] FALL_CONFIRMATION_FRAMES={FALL_CONFIRMATION_FRAMES}")
+        print(f"[INFO] MIN_NORMAL_FRAMES={MIN_NORMAL_FRAMES}")
+        print(f"[INFO] HIP_DROP_THRESHOLD={HIP_DROP_THRESHOLD}")
+        print(f"[INFO] ASPECT_RATIO_THRESHOLD={ASPECT_RATIO_THRESHOLD}")
+        print(f"[INFO] ALERT_COOLDOWN={ALERT_COOLDOWN}s")
 
     def add_message(self, role: str, text: str):
         self.state["conversation"].append({
@@ -486,6 +496,62 @@ class FallDetector:
             _voice_lock.release()
             return False
         return True
+
+    def _check_fall_geometry(self) -> bool:
+        """
+        ★ KEY FIX: Geometric gating — the model probability alone is NOT enough.
+        A real fall must show BOTH:
+          1. Hip drop: hips moved downward significantly (person went from
+             standing to ground level)
+          2. Aspect ratio: bounding box became wider than tall (person is
+             horizontal, not vertical)
+
+        This eliminates false positives from bending, sitting, reaching down,
+        or any movement that briefly looks fall-like to the ML model.
+        """
+        hip_drop_ok = False
+        aspect_ok   = False
+
+        # ── Check 1: Hip dropped significantly ──
+        if len(self.hip_y_history) >= HIP_DROP_WINDOW:
+            hip_now    = self.hip_y_history[-1]
+            hip_before = self.hip_y_history[-HIP_DROP_WINDOW]
+            hip_drop   = hip_now - hip_before   # positive = moved DOWN in frame
+            self.last_hip_drop = hip_drop
+
+            if hip_drop > HIP_DROP_THRESHOLD:
+                hip_drop_ok = True
+                print(f"[GEO] Hip drop OK: {hip_drop:.3f} > {HIP_DROP_THRESHOLD}")
+            else:
+                print(f"[GEO] Hip drop FAIL: {hip_drop:.3f} < {HIP_DROP_THRESHOLD}")
+        else:
+            print(f"[GEO] Not enough hip history ({len(self.hip_y_history)}/{HIP_DROP_WINDOW})")
+
+        # ── Check 2: Body aspect ratio is horizontal-ish ──
+        if len(self.aspect_history) >= 3:
+            # Average last 3 frames to smooth noise
+            recent_aspect = np.mean(list(self.aspect_history)[-3:])
+            self.last_aspect = recent_aspect
+
+            if recent_aspect < ASPECT_RATIO_THRESHOLD:
+                aspect_ok = True
+                print(f"[GEO] Aspect OK: {recent_aspect:.2f} < {ASPECT_RATIO_THRESHOLD} (body is horizontal)")
+            else:
+                print(f"[GEO] Aspect FAIL: {recent_aspect:.2f} >= {ASPECT_RATIO_THRESHOLD} (body still vertical)")
+        else:
+            print(f"[GEO] Not enough aspect history")
+
+        # ── Must pass BOTH checks ──
+        # If you find this too strict, change to: hip_drop_ok OR aspect_ok
+        geo_pass = hip_drop_ok and aspect_ok
+        self.last_geo_pass = geo_pass
+
+        if not geo_pass:
+            print(f"[GEO] ✗ Geometric gate BLOCKED — not a real fall pattern")
+        else:
+            print(f"[GEO] ✓ Geometric gate PASSED — looks like a real fall")
+
+        return geo_pass
 
     def ask_user_async(self, prob_fall: float):
         def worker():
@@ -509,11 +575,8 @@ class FallDetector:
                         turn=turn
                     )
 
-                    # Add to conversation before speaking — dashboard sees it immediately
                     self.add_message("assistant", ai_msg)
                     speak_blocking(ai_msg)
-
-                    # Wait for speaker echo to clear before opening mic
                     time.sleep(1.2)
 
                     print(f"[INFO] Turn {turn + 1}/{max_turns}: Listening...")
@@ -541,7 +604,6 @@ class FallDetector:
                             break
                         continue
 
-                # Final decision
                 if final_decision is None:
                     if not combined_reply.strip():
                         final_decision = "NO_RESPONSE"
@@ -631,6 +693,7 @@ class FallDetector:
                     smooth_prob = float(np.mean(self.prob_history))
                     self.last_smooth_prob = smooth_prob
 
+                    # ── Hip tracking ──
                     try:
                         l_hip = lm_list[mp_pose.PoseLandmark.LEFT_HIP.value]
                         r_hip = lm_list[mp_pose.PoseLandmark.RIGHT_HIP.value]
@@ -638,6 +701,7 @@ class FallDetector:
                     except Exception:
                         pass
 
+                    # ── Aspect ratio tracking ──
                     xs    = [lm.x for lm in lm_list]
                     ys    = [lm.y for lm in lm_list]
                     box_h = max(ys) - min(ys)
@@ -650,6 +714,7 @@ class FallDetector:
                     self.last_smooth_prob = smooth_prob
                     self.last_landmarks   = None
 
+            # ── Draw skeleton ──
             if self.last_landmarks is not None:
                 mp_drawing.draw_landmarks(
                     frame, self.last_landmarks, mp_pose.POSE_CONNECTIONS,
@@ -667,6 +732,7 @@ class FallDetector:
 
             self.state["last_prob"] = smooth_prob
 
+            # ── Overlays ──
             color = (0, 255, 0) if smooth_prob < THRESHOLD else (0, 0, 255)
             cv2.putText(frame, f"Fall Prob: {smooth_prob:.3f}",
                         (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
@@ -688,15 +754,23 @@ class FallDetector:
                         f"Low:{self.low_prob_counter}/{MIN_NORMAL_FRAMES}",
                         (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
+            # NEW: Show geometric gate status on frame
+            geo_color = (0, 255, 0) if self.last_geo_pass else (100, 100, 100)
+            cv2.putText(frame,
+                        f"HipDrop:{self.last_hip_drop:.2f} Aspect:{self.last_aspect:.2f} Gate:{'PASS' if self.last_geo_pass else 'BLOCK'}",
+                        (10, 145), cv2.FONT_HERSHEY_SIMPLEX, 0.45, geo_color, 1)
+
             if self.state["listening"]:
                 label = "LISTENING..." if self.state["waiting_for_response"] else "PROCESSING..."
-                cv2.putText(frame, label, (10, 150), cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(frame, label, (10, 170), cv2.FONT_HERSHEY_SIMPLEX,
                             0.7, (0, 255, 255), 2)
 
             if smooth_prob >= THRESHOLD:
                 cv2.rectangle(frame, (0, 0), (w - 1, h - 1), (0, 0, 255), 3)
 
-            # Fall state machine
+            # ===== FALL DETECTION STATE MACHINE =====
+
+            # ── Recovery counter ──
             if smooth_prob < self.exit_threshold:
                 self.low_prob_counter  += 1
                 self.high_prob_counter  = 0
@@ -712,23 +786,38 @@ class FallDetector:
                 if self.state["current_status"] != "ALERT_ESCALATED":
                     self.state["current_status"] = "NORMAL"
 
+            # ── High probability counter + GEOMETRIC GATING ──
             if smooth_prob >= THRESHOLD:
                 self.high_prob_counter += 1
+
                 if self.high_prob_counter >= FALL_CONFIRMATION_FRAMES:
-                    self.above_threshold = True
-                    if self.state["current_status"] != "ALERT_ESCALATED":
-                        self.state["current_status"] = "POTENTIAL_FALL"
-                    if (
-                        not self.alert_sent_for_current_fall
-                        and not self.state["waiting_for_response"]
-                        and not self.state["listening"]
-                        and not self._is_voice_busy()
-                        and time_since_alert >= ALERT_COOLDOWN
-                    ):
-                        self.alert_sent_for_current_fall = True
-                        self.last_alert_time = current_time
-                        print(f"[ALERT] FALL — frame {self.frame_idx}, prob={smooth_prob:.3f}")
-                        self.ask_user_async(smooth_prob)
+                    # ★ KEY CHANGE: check geometric pattern BEFORE confirming fall
+                    is_real_fall = self._check_fall_geometry()
+
+                    if is_real_fall:
+                        self.above_threshold = True
+                        if self.state["current_status"] != "ALERT_ESCALATED":
+                            self.state["current_status"] = "POTENTIAL_FALL"
+
+                        if (
+                            not self.alert_sent_for_current_fall
+                            and not self.state["waiting_for_response"]
+                            and not self.state["listening"]
+                            and not self._is_voice_busy()
+                            and time_since_alert >= ALERT_COOLDOWN
+                        ):
+                            self.alert_sent_for_current_fall = True
+                            self.last_alert_time = current_time
+                            print(f"[ALERT] ★ CONFIRMED FALL — frame {self.frame_idx}, "
+                                  f"prob={smooth_prob:.3f}, hip_drop={self.last_hip_drop:.3f}, "
+                                  f"aspect={self.last_aspect:.2f}")
+                            self.ask_user_async(smooth_prob)
+                    else:
+                        # High probability but geometry says it's NOT a fall
+                        # (bending, sitting, reaching etc.)
+                        # Don't reset high_prob_counter — let it keep counting
+                        # but don't trigger the alert
+                        pass
             else:
                 self.high_prob_counter = 0
 
@@ -791,7 +880,6 @@ def status():
 @app.route("/conversation")
 def conversation():
     det = get_detector()
-    # Return empty list (not 404) if no conversation yet
     return jsonify(det.state.get("conversation", []))
 
 
@@ -828,7 +916,6 @@ def reset():
 
 @app.route("/override_alert", methods=["POST"])
 def override_alert():
-    """Cancel a false alarm — resets state and logs the override."""
     det = get_detector()
     det.above_threshold              = False
     det.alert_sent_for_current_fall  = False
@@ -866,12 +953,17 @@ def shutdown():
 
 if __name__ == "__main__":
     print("\n" + "="*52)
-    print("[STARTUP] Guardian Fall Detection")
-    print(f"  Model   : {model is not None}  ({MODEL_PATH})")
-    print(f"  Scaler  : {scaler is not None}")
-    print(f"  OpenAI  : {client is not None}")
-    print(f"  Voice   : {USE_VOICE}")
-    print(f"  Telegram: {bool(TELEGRAM_BOT_TOKEN)}")
+    print("[STARTUP] Guardian Fall Detection — FALSE POSITIVE FIX")
+    print(f"  Model    : {model is not None}  ({MODEL_PATH})")
+    print(f"  Scaler   : {scaler is not None}")
+    print(f"  OpenAI   : {client is not None}")
+    print(f"  Voice    : {USE_VOICE}")
+    print(f"  Telegram : {bool(TELEGRAM_BOT_TOKEN)}")
+    print(f"  Threshold: {THRESHOLD}")
+    print(f"  HipDrop  : {HIP_DROP_THRESHOLD}")
+    print(f"  Aspect   : {ASPECT_RATIO_THRESHOLD}")
+    print(f"  Confirm  : {FALL_CONFIRMATION_FRAMES} frames")
+    print(f"  Cooldown : {ALERT_COOLDOWN}s")
     print("="*52 + "\n")
     if model is None:
         print("[WARN] No model — fall detection disabled. Run train_model.py first.")

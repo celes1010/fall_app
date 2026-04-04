@@ -33,7 +33,7 @@ body>*{position:relative;z-index:1}
 @media(max-width:900px){.layout{grid-template-columns:1fr}}
 .rcol{display:flex;flex-direction:column;gap:16px}
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:18px;transition:border-color .3s;backdrop-filter:blur(4px);animation:fade-up .45s ease both}
-.card:nth-child(1){animation-delay:.05s}.card:nth-child(2){animation-delay:.12s}.card:nth-child(3){animation-delay:.19s}.card:nth-child(4){animation-delay:.26s}
+.card:nth-child(1){animation-delay:.05s}.card:nth-child(2){animation-delay:.12s}.card:nth-child(3){animation-delay:.19s}
 .card.ca{border-color:rgba(255,61,90,.4);box-shadow:0 0 30px rgba(255,61,90,.06)}
 .card.cp{border-color:rgba(255,179,71,.3)}
 @keyframes fade-up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
@@ -68,17 +68,6 @@ body>*{position:relative;z-index:1}
 @keyframes wv{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
 .obtn{margin-top:11px;width:100%;padding:10px;border-radius:var(--rs);border:1px solid rgba(255,61,90,.4);background:rgba(255,61,90,.1);color:var(--red);font-size:.73rem;font-weight:600;font-family:'Syne',sans-serif;cursor:pointer;transition:all .2s;display:none}
 .obtn:hover{background:rgba(255,61,90,.2)}.obtn.show{display:block}
-.maya-hdr{display:flex;align-items:center;gap:11px;margin-bottom:14px}
-.mavatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--purple),var(--blue));display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;animation:avatar-glow 4s ease-in-out infinite}
-@keyframes avatar-glow{0%,100%{box-shadow:0 0 16px rgba(157,120,248,.3)}50%{box-shadow:0 0 28px rgba(157,120,248,.6)}}
-.mname{font-family:'Syne',sans-serif;font-size:.88rem;font-weight:700}.mrole{font-size:.62rem;color:var(--text2);margin-top:1px}
-.cwrap{height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;padding-right:2px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-.cempty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:.72rem;flex-direction:column;gap:8px;text-align:center;font-style:italic}
-.mrow{display:flex;gap:8px}.mrow.user{flex-direction:row-reverse}
-.mbub{max-width:84%;padding:9px 13px;border-radius:14px;font-size:.73rem;line-height:1.6}
-.mrow.assistant .mbub{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
-.mrow.user .mbub{background:rgba(61,140,255,.1);border:1px solid rgba(61,140,255,.2);color:var(--blue);border-bottom-right-radius:4px}
-.mts{font-size:.58rem;color:var(--text3);align-self:flex-end;white-space:nowrap;font-family:'DM Mono',monospace}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .met{background:var(--bg3);border:1px solid var(--border);border-radius:var(--rs);padding:13px 15px;position:relative;overflow:hidden}
 .met::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
@@ -87,7 +76,11 @@ body>*{position:relative;z-index:1}
 .mlabel{font-family:'DM Mono',monospace;font-size:.58rem;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px}
 .mval{font-family:'Syne',sans-serif;font-size:1.4rem;font-weight:800;letter-spacing:-.03em;line-height:1}
 .msub{font-size:.6rem;color:var(--text2);margin-top:4px}
-.lscroll{max-height:175px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.decision-row{margin-top:10px;padding:11px 14px;border-radius:var(--rs);background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;min-height:42px}
+.decision-label{color:var(--text3);font-family:'DM Mono',monospace;font-size:.6rem;text-transform:uppercase;letter-spacing:.08em}
+.decision-val{font-family:'Syne',sans-serif;font-size:.78rem;font-weight:700}
+.dv-ok{color:var(--green)}.dv-alert{color:var(--red)}.dv-warn{color:var(--amber)}.dv-none{color:var(--text3)}
+.lscroll{max-height:240px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
 table{width:100%;border-collapse:collapse;font-family:'DM Mono',monospace;font-size:.65rem}
 thead{position:sticky;top:0;background:var(--bg2);z-index:1}
 th{padding:5px 6px 8px;text-align:left;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);letter-spacing:.06em;text-transform:uppercase}
@@ -98,6 +91,7 @@ tbody tr:last-child td{border-bottom:none}
 </style>
 </head>
 <body>
+
 <header class="hdr">
   <div class="hdr-l">
     <div class="logo">🛡</div>
@@ -110,6 +104,7 @@ tbody tr:last-child td{border-bottom:none}
 </header>
 
 <div class="layout">
+
   <div>
     <div class="card" id="vcard">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -134,7 +129,7 @@ tbody tr:last-child td{border-bottom:none}
         <div class="pill">Escalated <span id="ec">0</span></div>
       </div>
       <div class="vstatus" id="vstatus">
-        <span style="font-size:16px">🎙</span><span>Maya is standing by</span>
+        <span style="font-size:16px">🎙</span><span>Aryan is standing by</span>
       </div>
       <button class="obtn" id="obtn" onclick="doOverride()">✕ &nbsp;Cancel false alarm</button>
     </div>
@@ -142,23 +137,22 @@ tbody tr:last-child td{border-bottom:none}
 
   <div class="rcol">
     <div class="card">
-      <div class="maya-hdr">
-        <div class="mavatar">🤖</div>
-        <div><div class="mname">Maya</div><div class="mrole">AI health companion</div></div>
-      </div>
-      <div class="cwrap" id="cwrap">
-        <div class="cempty">
-          <span style="font-size:24px">💬</span>
-          <span>Maya will speak here<br>when a fall is detected</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
       <div class="ct">Session metrics</div>
       <div class="mgrid">
-        <div class="met m-falls"><div class="mlabel">Total falls</div><div class="mval" id="mf">0</div><div class="msub">this session</div></div>
-        <div class="met m-esc"><div class="mlabel">Escalated</div><div class="mval" id="me">0</div><div class="msub">alerts sent</div></div>
+        <div class="met m-falls">
+          <div class="mlabel">Total falls</div>
+          <div class="mval" id="mf">0</div>
+          <div class="msub">this session</div>
+        </div>
+        <div class="met m-esc">
+          <div class="mlabel">Escalated</div>
+          <div class="mval" id="me">0</div>
+          <div class="msub">alerts sent</div>
+        </div>
+      </div>
+      <div class="decision-row">
+        <span class="decision-label">Last decision</span>
+        <span class="decision-val dv-none" id="last-dec">—</span>
       </div>
     </div>
 
@@ -169,7 +163,7 @@ tbody tr:last-child td{border-bottom:none}
       </div>
       <div class="lscroll">
         <table>
-          <thead><tr><th>Time</th><th>Decision</th><th>Prob</th><th>User said</th></tr></thead>
+          <thead><tr><th>Time</th><th>Decision</th><th>Prob</th><th>Reply</th></tr></thead>
           <tbody id="lbody">
             <tr><td colspan="4" style="color:var(--text3);text-align:center;padding:16px;font-style:italic">No events yet</td></tr>
           </tbody>
@@ -177,103 +171,106 @@ tbody tr:last-child td{border-bottom:none}
       </div>
     </div>
   </div>
+
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-setInterval(()=>{ $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
+setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 
 function setStatus(s) {
-  const map = {NORMAL:['bn','Normal'],POTENTIAL_FALL:['bp','Potential Fall'],ALERT_ESCALATED:['be','Alert Sent']};
-  const [cls,lbl] = map[s]||['bi',s];
-  $('sbadge').className='sbadge '+cls;
-  $('sbadge').innerHTML=`<span class="bdot"></span><span>${lbl}</span>`;
-  $('vcard').className='card'+(s==='ALERT_ESCALATED'?' ca':s==='POTENTIAL_FALL'?' cp':'');
-  $('vwrap').className='vwrap'+(s==='ALERT_ESCALATED'?' alert-flash':'');
-  $('obtn').className='obtn'+(s==='ALERT_ESCALATED'||s==='POTENTIAL_FALL'?' show':'');
+  const map = { NORMAL:['bn','Normal'], POTENTIAL_FALL:['bp','Potential Fall'], ALERT_ESCALATED:['be','Alert Sent'] };
+  const [cls, lbl] = map[s] || ['bi', s];
+  $('sbadge').className = 'sbadge ' + cls;
+  $('sbadge').innerHTML = `<span class="bdot"></span><span>${lbl}</span>`;
+  $('vcard').className  = 'card' + (s === 'ALERT_ESCALATED' ? ' ca' : s === 'POTENTIAL_FALL' ? ' cp' : '');
+  $('vwrap').className  = 'vwrap' + (s === 'ALERT_ESCALATED' ? ' alert-flash' : '');
+  $('obtn').className   = 'obtn'  + (s === 'ALERT_ESCALATED' || s === 'POTENTIAL_FALL' ? ' show' : '');
 }
 
 function setProb(p) {
-  const pct=Math.min(100,p*100);
-  const col=p>=0.60?'var(--red)':p>=0.35?'var(--amber)':'var(--green)';
-  $('prob-disp').textContent=p.toFixed(3);$('prob-disp').style.color=col;
-  $('pbar').style.background=col;$('pbar').style.width=pct+'%';
-  $('pbar-pct').textContent=Math.round(pct)+'%';
+  const pct = Math.min(100, p * 100);
+  const col  = p >= 0.60 ? 'var(--red)' : p >= 0.35 ? 'var(--amber)' : 'var(--green)';
+  $('prob-disp').textContent = p.toFixed(3);
+  $('prob-disp').style.color = col;
+  $('pbar').style.background = col;
+  $('pbar').style.width      = pct + '%';
+  $('pbar-pct').textContent  = Math.round(pct) + '%';
 }
 
-function setVoice(listening,waiting,speaking) {
-  const el=$('vstatus');
-  const wave=`<div class="wave"><b></b><b></b><b></b><b></b><b></b></div>`;
-  if(speaking){el.className='vstatus vs';el.innerHTML=wave+`<span>Maya is speaking\u2026</span>`;}
-  else if(waiting){el.className='vstatus vl';el.innerHTML=wave+`<span>Listening \u2014 say "I'm okay" or "I need help"</span>`;}
-  else if(listening){el.className='vstatus vs';el.innerHTML=`<span style="font-size:16px">\u23F3</span><span>Processing\u2026</span>`;}
-  else{el.className='vstatus';el.innerHTML=`<span style="font-size:16px">\uD83C\uDF99</span><span>Maya is standing by</span>`;}
+function setVoice(listening, waiting, speaking) {
+  const el   = $('vstatus');
+  const wave = `<div class="wave"><b></b><b></b><b></b><b></b><b></b></div>`;
+  if (speaking) {
+    el.className = 'vstatus vs';
+    el.innerHTML = wave + `<span>Maya is speaking…</span>`;
+  } else if (waiting) {
+    el.className = 'vstatus vl';
+    el.innerHTML = wave + `<span>Listening — say "I'm okay" or "I need help"</span>`;
+  } else if (listening) {
+    el.className = 'vstatus vs';
+    el.innerHTML = `<span style="font-size:16px">⏳</span><span>Processing…</span>`;
+  } else {
+    el.className = 'vstatus';
+    el.innerHTML = `<span style="font-size:16px">🎙</span><span>Maya is standing by</span>`;
+  }
 }
 
-function esc(t){ return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function setDecision(d) {
+  const el  = $('last-dec');
+  const map = { USER_OK:'dv-ok', OVERRIDE_OK:'dv-ok', NEEDS_HELP:'dv-alert', NO_RESPONSE:'dv-alert', UNCERTAIN:'dv-warn' };
+  el.className   = 'decision-val ' + (map[d] || 'dv-none');
+  el.textContent = d || '—';
+}
 
-let _lastConvLen = -1;
-
-async function fetchConv() {
-  try {
-    const r = await fetch('/conversation');
-    if(!r.ok){ console.error('[conv] HTTP',r.status); return; }
-    const msgs = await r.json();
-    if(!Array.isArray(msgs)) return;
-    if(msgs.length === _lastConvLen) return;
-    _lastConvLen = msgs.length;
-    const w = $('cwrap');
-    if(msgs.length===0){
-      w.innerHTML=`<div class="cempty"><span style="font-size:24px">\uD83D\uDCAC</span><span>Maya will speak here<br>when a fall is detected</span></div>`;
-      return;
-    }
-    w.innerHTML = msgs.map(m=>
-      `<div class="mrow ${esc(m.role)}"><div class="mbub">${esc(m.text)}</div><div class="mts">${esc(m.ts||'')}</div></div>`
-    ).join('');
-    w.scrollTop = w.scrollHeight;
-  } catch(e){ console.error('[conv]',e); }
+function esc(t) {
+  return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function fetchStatus() {
   try {
     const r = await fetch('/status');
-    if(!r.ok){ console.error('[status] HTTP',r.status); return; }
+    if (!r.ok) return;
     const d = await r.json();
-    setStatus(d.current_status||'NORMAL');
-    setProb(d.last_prob??0);
+    setStatus(d.current_status || 'NORMAL');
+    setProb(d.last_prob ?? 0);
     setVoice(d.listening, d.waiting_for_response, d.ai_speaking);
-    $('last-ev').textContent = d.last_event_time ? d.last_event_time.slice(11) : '\u2014';
-    $('fc').textContent = d.fall_count??0;
-    $('ec').textContent = d.escalated_count??0;
-    $('mf').textContent = d.fall_count??0;
-    $('me').textContent = d.escalated_count??0;
-  } catch(e){ console.error('[status]',e); }
+    setDecision(d.last_decision);
+    $('last-ev').textContent = d.last_event_time ? d.last_event_time.slice(11) : '—';
+    $('fc').textContent = d.fall_count ?? 0;
+    $('ec').textContent = d.escalated_count ?? 0;
+    $('mf').textContent = d.fall_count ?? 0;
+    $('me').textContent = d.escalated_count ?? 0;
+  } catch(e) { console.error('[status]', e); }
 }
 
 async function fetchLogs() {
   try {
     const r = await fetch('/logs');
-    if(!r.ok){ console.error('[logs] HTTP',r.status); return; }
+    if (!r.ok) return;
     const logs = await r.json();
-    if(!Array.isArray(logs)||!logs.length) return;
-    const cls={NEEDS_HELP:'dn',NO_RESPONSE:'dno',UNCERTAIN:'du',USER_OK:'dok',OVERRIDE_OK:'dov'};
-    $('lbody').innerHTML = logs.slice(0,20).map(row=>
-      `<tr><td>${esc((row.timestamp||'').slice(11))}</td><td class="${cls[row.decision]||''}">${esc(row.decision||'')}</td><td>${esc(String(row.prob_fall||''))}</td><td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((row.reply||'').slice(0,40))}</td></tr>`
+    if (!Array.isArray(logs) || !logs.length) return;
+    const cls = { NEEDS_HELP:'dn', NO_RESPONSE:'dno', UNCERTAIN:'du', USER_OK:'dok', OVERRIDE_OK:'dov' };
+    $('lbody').innerHTML = logs.slice(0, 25).map(row =>
+      `<tr>
+        <td>${esc((row.timestamp||'').slice(11))}</td>
+        <td class="${cls[row.decision]||''}">${esc(row.decision||'')}</td>
+        <td>${esc(String(row.prob_fall||''))}</td>
+        <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((row.reply||'').slice(0,45))}</td>
+      </tr>`
     ).join('');
-  } catch(e){ console.error('[logs]',e); }
+  } catch(e) { console.error('[logs]', e); }
 }
 
 async function doOverride() {
   try {
-    const r = await fetch('/override_alert',{method:'POST'});
-    if(!r.ok) console.error('[override] HTTP',r.status);
-    fetchStatus(); fetchConv(); fetchLogs();
-  } catch(e){ console.error('[override]',e); }
+    await fetch('/override_alert', { method: 'POST' });
+    fetchStatus(); fetchLogs();
+  } catch(e) { console.error('[override]', e); }
 }
 
-fetchStatus(); fetchConv(); fetchLogs();
+fetchStatus(); fetchLogs();
 setInterval(fetchStatus, 800);
-setInterval(fetchConv,   600);
 setInterval(fetchLogs,  4000);
 </script>
 </body>
